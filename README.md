@@ -64,3 +64,23 @@ Using the `IMAGE ID` (e.g. `e62ceaad5db5`) you can run a container and e.g. star
 If you're working with a known bacteria or gene and you would like to perform gene set enrichment analysis (GSEA), you can look up the correct database from [Bioconductor](https://bioconductor.org/packages/release/BiocViews.html#___OrgDb) and just execute `./src/gene_set_enrichment.R` by providing the correct arguments. Please take a look at the help interface for details.
 
 If you're using [eggNOG-mapper](http://eggnog-mapper.embl.de/) to retrieve mappings of your custom identifiers to knwon GO/KEGG_ko terms, you can utilize `./src/eggnog_mapping_gen.R` to generate the necessary GENEID-GO and GENEID-KEGG_ko mapping tables. Executing `eggnog_mapping_gen.R` will create files `geneid-to-go.csv` and `geneid-to-kegg.csv` that can be passed to `gene_set_enrichment.R` as arguments for options `--go_map` and `--kegg_map` respectively. Afterwards you should get the plots for the analysis.
+
+## Resources
+
+* List of available KEGG codes: [https://www.genome.jp/kegg/catalog/org_list.html](https://www.genome.jp/kegg/catalog/org_list.html)
+* List of available organism annotation databases: [https://bioconductor.org/packages/3.18/BiocViews.html#___OrgDb](https://bioconductor.org/packages/3.18/BiocViews.html#___OrgDb)
+
+## Examples
+
+Let's say you have the DESeq2 output CSV file that uses some custom identifiers that have to be mapped to valid GO/KEGG_ko identifiers. In this case you would use [eggNOG-mapper](http://eggnog-mapper.embl.de/) to get the mapping from your custom identifiers to the GO and KEGG_ko values. The job will provide you the file `out.emapper.annotations`. Now you execute the commands below.
+
+```bash
+# This will create the necessary GENEID-to-GO and GENEID-to-KEGG_ko mapping tables
+./src/eggnog_mapping_gen.R --annotated=<path>/out.emapper.annotations
+
+# Now you can run the enrichment analysis
+./src/gene_set_enrichment.R --file=<path-to-deseq2-csv> --organism_annotation=<annotationdb> --go_map=geneid-to-go.csv --kegg_map=geneid-to-kegg.csv --keg_keytype=kegg --keg_code=<kegg-code> --keytype=GO
+
+# Or specific for e.coli K12
+./src/gene_set_enrichment.R --file=<path-to-deseq2-csv> --organism_annotation=org.EcK12.eg.db --go_map=geneid-to-go.csv --kegg_map=geneid-to-kegg.csv --keg_keytype=kegg --keg_code=ecok --keytype=GO
+```
