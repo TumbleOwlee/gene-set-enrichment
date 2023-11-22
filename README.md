@@ -21,7 +21,6 @@ You can execute the scripts in your local environment or create a singularity or
 If you have `singularity` installed, this repository provides the recipe to create the necessaary `r-lang` environment that contains all necessary packages. Please refer to [the Singularity guide](https://docs.sylabs.io/guides/2.6/user-guide/installation.html) for installation instruction if `singularity` is currently missing. You can create the `renv.sif` file with `singularity` as shown below.
 
 ```bash
-cd /path/to/repo/
 sudo singularity build renv.sif singularity/renv.def
 ```
 
