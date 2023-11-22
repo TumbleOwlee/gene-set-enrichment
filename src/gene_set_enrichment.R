@@ -51,7 +51,7 @@ if (TRUE) {
     config$key.type <- "GO"
     config$kegg.key.type <- "kegg"
     config$kegg.code <- "ecok"
-    config$run.kegg <- FALSE
+    config$run.kegg <- TRUE
     config$run.go <- TRUE
 }
 
@@ -76,11 +76,11 @@ main <- function() {
                     metavar = "ANNOTATION"),
         make_option(c("--no_gene_ontology"),
                     action = "store_false",
-                    default = config$run.go,
+                    default = !config$run.go,
                     help = "Disbale GO run."),
         make_option(c("--no_kyoto_genes"),
                     action = "store_false",
-                    default = config$run.kegg,
+                    default = !config$run.kegg,
                     help = "Disbale KEGG run."),
         make_option(c("--go_map"),
                     type = "character",
