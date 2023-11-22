@@ -54,13 +54,6 @@ jobs:
             name=$(basename -s ".def" "${{ matrix.changed_file }}")
             echo "filename=${name}.sif" >> $GITHUB_ENV
             sudo -E singularity build "$name.sif" ${{ matrix.changed_file }}
-            tag=$(echo "${recipe/Singularity\./}")
-            if [ "$tag" == "Singularity" ]; then
-                tag=latest
-            fi
-            # Build the container and name by tag
-            echo "Tag is $tag."
-            echo "tag=$tag" >> $GITHUB_ENV
          else
            echo "${{ matrix.changed_file }} is not found."
            echo "Present working directory: $PWD"
@@ -68,6 +61,7 @@ jobs:
          fi
 
       - name: Archive Singularity Image
+        if: ${{ env.keepgoing == 'true' }}
         uses: actions/upload-artifact@v3
         env:
           filename: ${{ env.filename }}
