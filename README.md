@@ -28,7 +28,7 @@ The build will take some time since multiple `r-lang` packages have to compile. 
 
 Afterwards you will have a `renv.sif` file that contains the R environment. You can execute any command in this environment by executing `./renv.sif <command>`. To get to the interactive R shell, just run `./renv.sif R` and use it as if it was installed locally.
 
-Alternatively you can check out the `Actions` tab since the configured workflow will perform a build whenever the file `./singularity/renv.def` changes. This way you can simply download the attached file and unpack the `renv.sif` image.
+Alternatively you can check out the `Actions` tab since the configured workflow will perform a build whenever the file `./singularity/renv.def` changes. This way you can simply download the attached file and unpack the `renv.sif` image. Make sure to look for any workflow that took more than 5 minutes since a workflow is started by any commit, but the image is only created if the definition file changes as part of the commit.
 
 ## Docker
 
