@@ -49,3 +49,13 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 
+# Singularity image
+*.sif
+
+# Private data
+private/*
+
+**/.Rproj.user
+**/.Rhistory
+**/.RData
+**/.Ruserdata

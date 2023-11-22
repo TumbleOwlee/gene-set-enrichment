@@ -1,0 +1,27 @@
+Bootstrap: docker
+From: rocker/r-ver:4.3.0
+
+%post
+    apt-get update
+    apt-get install -y libssl-dev libcurl4-openssl-dev libxml2-dev libfontconfig1-dev libglpk40
+    sed -i "s/MAKE=.*/MAKE=\"make -j 4\"/g" /usr/local/lib/R/etc/Renviron
+    sed -i "s/\(options(repos = c(CRAN = \).*\(), download.file.method = 'libcurl')\)/\1'http:\/\/cran.rstudio.com\/'\2/g" /usr/local/lib/R/etc/Rprofile.site
+    export CRAN="http://cran.rstudio.com"
+    Rscript -e 'r <- getOption("repos"); r["CRAN"]'
+    Rscript -e 'install.packages("BiocManager"); BiocManager::install()'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "optparse")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "RCurl")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "cli")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "ggridges")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "DOSE")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "enrichplot")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "pathview")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "clusterProfiler")'
+    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "europepmc")'
+    Rscript -e 'update.packages(ask = FALSE)'
+
+%environment
+    export CRAN="http://cran.rstudio.com"
+
+%runscript
+    exec $@
