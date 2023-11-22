@@ -7,18 +7,8 @@ From: rocker/r-ver:4.3.0
     sed -i "s/MAKE=.*/MAKE=\"make -j 4\"/g" /usr/local/lib/R/etc/Renviron
     sed -i "s/\(options(repos = c(CRAN = \).*\(), download.file.method = 'libcurl')\)/\1'http:\/\/cran.rstudio.com\/'\2/g" /usr/local/lib/R/etc/Rprofile.site
     export CRAN="http://cran.rstudio.com"
-    Rscript -e 'r <- getOption("repos"); r["CRAN"]'
     Rscript -e 'install.packages("BiocManager"); BiocManager::install()'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "optparse")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "RCurl")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "cli")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "ggridges")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "DOSE")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "enrichplot")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "pathview")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "clusterProfiler")'
-    Rscript -e 'require("BiocManager"); BiocManager::install(pkg = "europepmc")'
-    Rscript -e 'update.packages(ask = FALSE)'
+    Rscript -e 'require("BiocManager"); install <- function(pkgs) { for (pkg in pkgs) { BiocManager::install(pkg = pkg) } }; install(c("RCurl", "cli", "ggridges", "DOSE", "enrichplot", "pathview", "clusterProfiler", "europepmc", "numbers", "tools", "optparse", "progress")); update.packages(ask = FALSE)'
 
 %environment
     export CRAN="http://cran.rstudio.com"

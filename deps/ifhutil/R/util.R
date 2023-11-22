@@ -461,14 +461,17 @@ ifh.table.expand <- function(table, by, split = ",", na = "", limit.to = vector(
 
     .GlobalEnv$ifh.step(paste(nrow(table), "rows to expand."))
 
+    # Create .cache directory if missing
+    ifh.dir.create_if("./.cache")
+
     # We create a cache file and print each expanded row into it.
     # This is useful since we can not predict the size of the result table
     # and adding a additional row to an existing data.frame multiple times
     # takes a lot of computational time since the data.frame has to reallocate
     # memory each time and copy the old memory into the new.
     # Loading a CSV file into a data.frame on the other hand is way faster.
-    filename <- paste(".", ifh.string.random(1), ".csv", sep = "")
-    output <- file(filename, open = "a")
+    filepath <- ifh.create.path("./.cache/", ifh.string.random(1), ".csv")
+    output <- file(filepath, open = "a")
 
     # Write header line
     writeLines(paste(by, paste(limit.to, collapse = sep, sep = sep), collapse = sep, sep = sep), output)
@@ -497,9 +500,9 @@ ifh.table.expand <- function(table, by, split = ",", na = "", limit.to = vector(
     close(output)
 
     # Now read the expanded table
-    data <- read.csv(filename, header = TRUE, sep = sep)
+    data <- read.csv(filepath, header = TRUE, sep = sep)
     # Remove the cache file
-    file.remove(filename)
+    file.remove(filepath)
     # Inform user of expansion size
     .GlobalEnv$ifh.success(paste("All rows expanded. Total of ", nrow(data), "rows."))
 

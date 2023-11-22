@@ -36,14 +36,14 @@ main <- function() {
     
     # Rename 'query' to 'GENEID' for GSE
     colnames(annotated.df)[colnames(annotated.df) == 'query'] <- 'GENEID'
-    ifh.success(' Annotated inputs loaded.')
+    ifh.success('Annotated inputs loaded.')
 
     # Expand the table based on 'GOs' and export to CSV
-    geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', sep = '\t', split = ',', limit.to = c('GENEID'))
+    geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID'))
     ifh.table.export(geneid.to.go, 'geneid-to-go.csv')
     
     # Expand the table based on 'KEGG_ko' and export to CSV
-    geneid.to.kegg <- ifh.table.expand(annotated.df, by = 'KEGG_ko', sep = '\t', split = ',', limit.to = c('GENEID'), remove.prefix = 'ko:', na = '-')
+    geneid.to.kegg <- ifh.table.expand(annotated.df, by = 'KEGG_ko', split = ',', limit.to = c('GENEID'), remove.prefix = 'ko:', na = '-')
     ifh.table.export(geneid.to.kegg, 'geneid-to-kegg.csv')
 }
 

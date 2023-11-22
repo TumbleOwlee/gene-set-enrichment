@@ -145,9 +145,9 @@ main <- function() {
     opt = ifh.parse_args(opt_parser)
 
     # Install/Load organism annotations
-    ifh.info(" Load organism annotation...")
+    ifh.info("Load organism annotation...")
     ifh.install(pkg = opt$organism_annotation, quiet = opt$quiet)
-    ifh.success(" Organism annotation loaded.")
+    ifh.success("Organism annotation loaded.")
 
     # Print supported key types of the organism annotations
     if (opt$list_keytypes) {
@@ -156,21 +156,24 @@ main <- function() {
         return()
     }
 
+    # Create cache directory if not present
+    ifh.dir.create_if("./.cache")
+
     # Create GO cache file name
-    go.geneid.map.file = ifh.create.path("./cache/",
+    go.geneid.map.file = ifh.create.path("./.cache/",
                                          ifh.create.filename(opt$organism_annotation, file_path_sans_ext(basename(opt$go_map))),
                                          "_go.RData")
     # Create KEGG cache file name
-    kegg.geneid.map.file = ifh.create.path("./cache/",
+    kegg.geneid.map.file = ifh.create.path("./.cache/",
                                            ifh.create.filename(opt$organism_annotation,
                                                                file_path_sans_ext(basename(opt$kegg_map))),
                                            "_kegg.RData")
     # Create GO cache file path
-    go.cache.file = ifh.create.path("./cache/",
+    go.cache.file = ifh.create.path("./.cache/",
                                     ifh.create.filename(opt$organism_annotation, file_path_sans_ext(basename(opt$file))),
                                     "_go.RData")
     # Create KEGG cache file path
-    kegg.cache.file = ifh.create.path("./cache/",
+    kegg.cache.file = ifh.create.path("./.cache/",
                                       ifh.create.filename(opt$organism_annotation, file_path_sans_ext(basename(opt$file))),
                                       "_kegg.RData")
 
@@ -275,7 +278,6 @@ main <- function() {
 
             # Store cached results
             ifh.info("Save results in cache file", go.cache.file)
-            ifh.dir.create_if("./cache")
             ifh.cache.save(go.gse, gene.list, file = go.cache.file)
         }
 
@@ -334,7 +336,6 @@ main <- function() {
 
             # Store cached results
             ifh.info("Save results in cache file", kegg.cache.file)
-            ifh.dir.create_if("./cache")
             ifh.cache.save(kegg.gse, kegg.gene.list, gene.list, file = kegg.cache.file)
         }
     }
@@ -344,34 +345,34 @@ main <- function() {
         ifh.step("Create GO dotplot...")
         p <- dotplot(go.gse, showCategory = 10, split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
-        ifh.success(" Dotplot created.")
+        ifh.success("Dotplot created.")
 
         ifh.step("Create GO emapplot...")
         go.gse2 <- pairwise_termsim(go.gse, method="JC")
         p <- emapplot(go.gse2, showCategory = 10, cex.params = list(category_label = 0.5))
         print(p)
-        ifh.success(" Emapplot created.")
+        ifh.success("Emapplot created.")
 
         ifh.step("Create GO cnetplot...")
         p <- cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=gene.list), showCategory = 3, cex.params = list(category_label = 0.7, gene_label = 0.5))
         print(p)
-        ifh.success(" Cnetplot created.")
+        ifh.success("Cnetplot created.")
 
         ifh.step("Create GO ridgeplot...")
         p <- ridgeplot(go.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
         print(p)
-        ifh.success(" Ridgeplot created.")
+        ifh.success("Ridgeplot created.")
 
         ifh.step("Create GO gseaplot...")
         p <- gseaplot(go.gse, by = "all", title = go.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
         print(p)
-        ifh.success(" Gseaplot created.")
+        ifh.success("Gseaplot created.")
 
         ifh.step("Create GO pmcplot...")
         terms <- go.gse$Description[1:3]
         p <- pmcplot(terms, 2010:2023, proportion = FALSE) + guides(fill=guide_legend(nrow=2,byrow=TRUE))
         print(p)
-        ifh.success(" Pmcplot created.")
+        ifh.success("Pmcplot created.")
     }
 
     # Plot KEGG GSE results
@@ -379,28 +380,28 @@ main <- function() {
         ifh.step("Create KEGG dotplot...")
         p <- dotplot(kegg.gse, showCategory = 10, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
-        ifh.success(" Dotplot created.")
+        ifh.success("Dotplot created.")
 
         ifh.step("Create KEGG emapplot...")
         kegg.gse2 <- pairwise_termsim(kegg.gse, method="JC")
         p <- emapplot(kegg.gse2, cex.params = list(category_label = 0.5))
         print(p)
-        ifh.success(" Emapplot created.")
+        ifh.success("Emapplot created.")
 
         ifh.step("Create KEGG cnetplot...")
         p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=gene.list), cex.params = list(category_label = 0.7, gene_label = 0.5))
         print(p)
-        ifh.success(" Cnetplot created.")
+        ifh.success("Cnetplot created.")
 
         ifh.step("Create KEGG ridgeplot...")
         p <- ridgeplot(kegg.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
         print(p)
-        ifh.success(" Ridgeplot created.")
+        ifh.success("Ridgeplot created.")
 
         ifh.step("Create KEGG gseaplot...")
         p <- gseaplot(kegg.gse, by = "all", title = kegg.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
         print(p)
-        ifh.success(" Gseaplot created.")
+        ifh.success("Gseaplot created.")
 
 
         # Display KEGG pathview (currently disabled)
@@ -430,7 +431,7 @@ main <- function() {
         #
         #   step("Create KEGG pathview...")
         #   show_pathview(gene.data=kegg.gene.list, pathway.id="dme04130", species = opt$kegg_code)
-        #   success(" Pathview created.")
+        #   success("Pathview created.")
     }
 }
 
