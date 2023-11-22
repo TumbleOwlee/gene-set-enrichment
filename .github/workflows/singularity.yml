@@ -51,13 +51,12 @@ jobs:
         run: |
          ls
          if [ -f "${{ matrix.changed_file }}" ]; then
-            name=$(basename -s ".def" "${{ matrix.changed_file }}")
-            echo "filename=${name}.sif" >> $GITHUB_ENV
-            sudo -E singularity build "$name.sif" ${{ matrix.changed_file }}
+           name=$(basename "${{ matrix.changed_file }}" ".def")
+           echo "filename=${name}.sif" >> $GITHUB_ENV
+           sudo -E singularity build "$name.sif" ${{ matrix.changed_file }}
          else
            echo "${{ matrix.changed_file }} is not found."
            echo "Present working directory: $PWD"
-           ls
          fi
 
       - name: Archive Singularity Image

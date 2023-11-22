@@ -15,4 +15,3 @@ From: rocker/r-ver:4.3.0
 
 %runscript
     exec $@
-
