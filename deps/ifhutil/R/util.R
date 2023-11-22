@@ -114,7 +114,7 @@ ifh.error <- function(...) {
 #' @param expr  expression to execute
 #' @param quiet if true, all output of expression is suppressed
 #' @examples
-#' ifh.exec({install_packages('cli')}, quiet = TRUE)
+#' ifh.exec({install.packages('cli')}, quiet = TRUE)
 #'
 #' @export
 ifh.exec <- function(expr, quiet = FALSE) {

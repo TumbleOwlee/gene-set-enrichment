@@ -17,6 +17,6 @@ to suppress all output by utilizing a flag. It is mainly used by CLI
 applications that provide an '--quiet' flag to switch output.
 }
 \examples{
-ifh.exec({install_packages('cli')}, quiet = TRUE)
+ifh.exec({install.packages('cli')}, quiet = TRUE)
 
 }
