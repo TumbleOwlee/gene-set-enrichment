@@ -28,6 +28,8 @@ The build will take some time since multiple `r-lang` packages have to compile. 
 
 Afterwards you will have a `renv.sif` file that contains the R environment. You can execute any command in this environment by executing `./renv.sif <command>`. To get to the interactive R shell, just run `./renv.sif R` and use it as if it was installed locally.
 
+Alternatively you can check out the `Actions` tab since the configured workflow will perform a build whenever the file `./singularity/renv.def` changes. This way you can simply download the attached file and unpack the `renv.sif` image.
+
 ## Docker
 
 If you prefer to use a docker container, you can simply use the `./singularity/singularity2docker.sh` script. Just execute the command below. The script is provided by [SingularityHub](https://github.com/singularityhub/singularity2docker).
