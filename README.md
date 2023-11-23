@@ -7,7 +7,7 @@ This repository contains the script and environment to perform GO and KEGG enric
 To simplify the scripts and minimize code duplication, the package `ifhutil` is created. You can find it in `./deps/ifhutil`. Since the scripts in `./src/` depend on the library, you have to install it beforehand. To install the library, just execute the command below in your `R` shell.
 
 ```R
-> install.packages("ifhutil", repos = NULL, type = "local")
+> install.packages("deps/ifhutil", repos = NULL, type = "local")
 ```
 
 Afterwards you should be able to load the library with `library(ifhutil)`. Documentation for each provided function is also added, thus you can check out `?ifh.<function>` easily.
