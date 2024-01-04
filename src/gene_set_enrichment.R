@@ -41,7 +41,10 @@ config <- data.frame(
     # Run KEGG
     run.kegg = TRUE,
     # Count of categories to plot
-    show.categories = 10000
+    show.categories = 10000,
+    # Pathway ID
+    pathway.id = "ecok00010",
+    pathway.gene.idtype = "KEGG"
 )
 
 # Change configuration for e.coli K12 based on eggNOG-mapper output
@@ -57,6 +60,8 @@ if (TRUE) {
     config$kegg.code <- "ecok"
     config$run.kegg <- TRUE
     config$run.go <- TRUE
+    config$pathway.id = "ecok00010",
+    config$pathway.gene.idtype = "KEGG"
 }
 
 #' Performs GO and KEGG gene set enrichment analysis
@@ -153,7 +158,17 @@ main <- function() {
                     type = "integer",
                     default = config$show.categories,
                     help = "The count of categories to plot.",
-                    metavar = "N")
+                    metavar = "N"),
+        make_option(c("--kegg_pathway_id"),
+                    type = "character",
+                    default = config$pathway.id,
+                    help = "The kegg pathway id.",
+                    metavar = "ID"),
+        make_option(c("--kegg_pathway_gene_idtype"),
+                    type = "character",
+                    default = config$pathway.gene.idtype,
+                    help = "The kegg pathway gene id type.",
+                    metavar = "TYPE")
     )
     opt_parser = OptionParser(option_list = option_list)
     opt = ifh.parse_args(opt_parser)
@@ -525,9 +540,7 @@ main <- function() {
         }
         
         ifh.step("Create KEGG pathview...")
-        
-        show.pathview(gene.data=kegg.gene.list, pathway.id="ko04130", gene.idtype = "KEGG", species = opt$kegg_code)
-        #show.pathview(gene.data=kegg.gene.list, pathway.id="ko04130")#, species = opt$kegg_code)
+        pathview(cpd.data=kegg.gene.list, pathway.id = opt$kegg_pathway_id, species = opt$kegg_code, gene.idtype = opt$kegg_pathway_gene_idtype)
         ifh.success("Pathview created.")
     }
 }
