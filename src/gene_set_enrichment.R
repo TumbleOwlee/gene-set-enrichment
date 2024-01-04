@@ -47,6 +47,7 @@ if (FALSE) {
     config$organism.db <- "org.EcK12.eg.db"
     config$go.map <- "geneid-to-go.csv"
     config$go.toType <- "GENENAME"
+    config$ont <- "MF"
     config$kegg.map <- "geneid-to-kegg.csv"
     config$input.file <- "./private/L12VLB12_MGaccession.csv"
     config$key.type <- "GO"
@@ -193,9 +194,7 @@ main <- function() {
             ifh.cache.load(go.geneid.map.file)
         } else {
             ifh.info("Import GO map from", opt$go_map)
-            go.geneid.csv <- ifh.table.import(opt$go_map, header = TRUE, sep = "\t", comment.char = "#")
-            ifh.step("Execute buildGOmap.")
-            go.geneid.df <- buildGOmap(go.geneid.csv)
+            go.geneid.df <- ifh.table.import(opt$go_map, header = TRUE, sep = "\t", comment.char = "#")
             ifh.step("Create cache file.")
             ifh.cache.save(go.geneid.df, file = go.geneid.map.file)
             ifh.success("GO map imported.")
@@ -255,12 +254,12 @@ main <- function() {
             go.gene.list = NA
 
             if (opt$go_map != "") {
-                go.term.to.name <- bitr(go.geneid.df[,1], fromType='GO', toType=opt$go_toType, OrgDb=opt$organism_annotation)
-                go.term.to.name <- data.frame(go.term.to.name[,1], go.term.to.name[,4])
+                go.supported.ids <- select(org.EcK12.eg.db, keys(org.EcK12.eg.db, "GO"), "ENTREZID", "GO")[,'GO']
+                go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.supported.ids,]
+                go.term.to.name <- go2term(go.geneid.df[,1])
                 names(go.term.to.name) <- c('GO', 'NAME')
 
                 go.gene.list <- gene.list
-                go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.term.to.name[,'GO'],]
 
                 go.gse = suppressMessages({
                     GSEA(geneList = go.gene.list,
@@ -279,7 +278,7 @@ main <- function() {
             } else {
                 go.gene.list <- gene.list
                 go.gse = suppressMessages({
-                    gseGO(geneList = gene.list,
+                    gseGO(geneList = go.gene.list,
                           ont = opt$ont,
                           keyType = opt$keytype,
                           #nPerm = 10000,
@@ -360,7 +359,7 @@ main <- function() {
     # Plot GO GSE results
     if (!opt$no_gene_ontology) {
         ifh.step("Create GO dotplot...")
-        p <- dotplot(go.gse, showCategory = 10, split = ".sign", font.size=8) + facet_grid(.~.sign)
+        p <- dotplot(go.gse, showCategory = 20, split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
         ifh.success("Dotplot created.")
 
