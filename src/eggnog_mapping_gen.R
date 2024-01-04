@@ -39,7 +39,7 @@ main <- function() {
     ifh.success('Annotated inputs loaded.')
 
     # Expand the table based on 'GOs' and export to CSV
-    geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID'))
+    geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID'), na = '-')
     ifh.table.export(geneid.to.go, 'geneid-to-go.csv')
     
     # Expand the table based on 'KEGG_ko' and export to CSV

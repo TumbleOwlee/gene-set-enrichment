@@ -43,9 +43,10 @@ config <- data.frame(
 )
 
 # Change configuration for e.coli K12 based on eggNOG-mapper output
-if (TRUE) {
+if (FALSE) {
     config$organism.db <- "org.EcK12.eg.db"
     config$go.map <- "geneid-to-go.csv"
+    config$go.toType <- "GENENAME"
     config$kegg.map <- "geneid-to-kegg.csv"
     config$input.file <- "./private/L12VLB12_MGaccession.csv"
     config$key.type <- "GO"
@@ -87,6 +88,11 @@ main <- function() {
                     default = config$go.map,
                     help = "Specify custom GENEID-to-GO mapping file.",
                     metavar = "FILE"),
+        make_option(c("--go_toType"),
+                    type = "character",
+                    default = config$go.toType,
+                    help = "Specify GO to type mapping.",
+                    metavar = "TYPE"),
         make_option(c("--kegg_map"),
                     type = "character",
                     default = config$kegg.map,
@@ -246,9 +252,18 @@ main <- function() {
             ifh.step("Calculate GO gene set enrichment...")
             ifh.quiet(opt$quiet)
             go.gse = NA
+            go.gene.list = NA
+
             if (opt$go_map != "") {
+                go.term.to.name <- bitr(go.geneid.df[,1], fromType='GO', toType=opt$go_toType, OrgDb=opt$organism_annotation)
+                go.term.to.name <- data.frame(go.term.to.name[,1], go.term.to.name[,4])
+                names(go.term.to.name) <- c('GO', 'NAME')
+
+                go.gene.list <- gene.list
+                go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.term.to.name[,'GO'],]
+
                 go.gse = suppressMessages({
-                    GSEA(geneList = gene.list,
+                    GSEA(geneList = go.gene.list,
                          exponent = 1,
                          minGSSize = opt$min_gs_size,
                          maxGSSize = opt$max_gs_size,
@@ -256,11 +271,13 @@ main <- function() {
                          pAdjustMethod = opt$padjust_method,
                          verbose = FALSE,
                          eps = 0,
-                         TERM2GENE = go.geneid.df,
+                         TERM2GENE = go.term.to.gene,
+                         TERM2NAME = go.term.to.name,
                          by = "fgsea"
                          )
                 })
             } else {
+                go.gene.list <- gene.list
                 go.gse = suppressMessages({
                     gseGO(geneList = gene.list,
                           ont = opt$ont,
@@ -278,7 +295,7 @@ main <- function() {
 
             # Store cached results
             ifh.info("Save results in cache file", go.cache.file)
-            ifh.cache.save(go.gse, gene.list, file = go.cache.file)
+            ifh.cache.save(go.gse, go.gene.list, file = go.cache.file)
         }
 
         # Run KEGG GSE with organism database or custom KEGG_ko-GENEID mapping
@@ -347,32 +364,32 @@ main <- function() {
         print(p)
         ifh.success("Dotplot created.")
 
-        ifh.step("Create GO emapplot...")
-        go.gse2 <- pairwise_termsim(go.gse, method="JC")
-        p <- emapplot(go.gse2, showCategory = 10, cex.params = list(category_label = 0.5))
-        print(p)
-        ifh.success("Emapplot created.")
-
-        ifh.step("Create GO cnetplot...")
-        p <- cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=gene.list), showCategory = 3, cex.params = list(category_label = 0.7, gene_label = 0.5))
-        print(p)
-        ifh.success("Cnetplot created.")
-
-        ifh.step("Create GO ridgeplot...")
-        p <- ridgeplot(go.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
-        print(p)
-        ifh.success("Ridgeplot created.")
-
-        ifh.step("Create GO gseaplot...")
-        p <- gseaplot(go.gse, by = "all", title = go.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
-        print(p)
-        ifh.success("Gseaplot created.")
-
-        ifh.step("Create GO pmcplot...")
-        terms <- go.gse$Description[1:3]
-        p <- pmcplot(terms, 2010:2023, proportion = FALSE) + guides(fill=guide_legend(nrow=2,byrow=TRUE))
-        print(p)
-        ifh.success("Pmcplot created.")
+        # ifh.step("Create GO emapplot...")
+        # go.gse2 <- pairwise_termsim(go.gse, method="JC")
+        # p <- emapplot(go.gse2, showCategory = 10, cex.params = list(category_label = 0.5))
+        # print(p)
+        # ifh.success("Emapplot created.")
+        #
+        # ifh.step("Create GO cnetplot...")
+        # p <- cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=go.gene.list), showCategory = 3, cex.params = list(category_label = 0.7, gene_label = 0.5))
+        # print(p)
+        # ifh.success("Cnetplot created.")
+        #
+        # ifh.step("Create GO ridgeplot...")
+        # p <- ridgeplot(go.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
+        # print(p)
+        # ifh.success("Ridgeplot created.")
+        #
+        # ifh.step("Create GO gseaplot...")
+        # p <- gseaplot(go.gse, by = "all", title = go.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
+        # print(p)
+        # ifh.success("Gseaplot created.")
+        #
+        # ifh.step("Create GO pmcplot...")
+        # terms <- go.gse$Description[1:3]
+        # p <- pmcplot(terms, 2010:2023, proportion = FALSE) + guides(fill=guide_legend(nrow=2,byrow=TRUE))
+        # print(p)
+        # ifh.success("Pmcplot created.")
     }
 
     # Plot KEGG GSE results
@@ -382,26 +399,26 @@ main <- function() {
         print(p)
         ifh.success("Dotplot created.")
 
-        ifh.step("Create KEGG emapplot...")
-        kegg.gse2 <- pairwise_termsim(kegg.gse, method="JC")
-        p <- emapplot(kegg.gse2, cex.params = list(category_label = 0.5))
-        print(p)
-        ifh.success("Emapplot created.")
-
-        ifh.step("Create KEGG cnetplot...")
-        p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=gene.list), cex.params = list(category_label = 0.7, gene_label = 0.5))
-        print(p)
-        ifh.success("Cnetplot created.")
-
-        ifh.step("Create KEGG ridgeplot...")
-        p <- ridgeplot(kegg.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
-        print(p)
-        ifh.success("Ridgeplot created.")
-
-        ifh.step("Create KEGG gseaplot...")
-        p <- gseaplot(kegg.gse, by = "all", title = kegg.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
-        print(p)
-        ifh.success("Gseaplot created.")
+        # ifh.step("Create KEGG emapplot...")
+        # kegg.gse2 <- pairwise_termsim(kegg.gse, method="JC")
+        # p <- emapplot(kegg.gse2, cex.params = list(category_label = 0.5))
+        # print(p)
+        # ifh.success("Emapplot created.")
+        #
+        # ifh.step("Create KEGG cnetplot...")
+        # p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=kegg.gene.list), cex.params = list(category_label = 0.7, gene_label = 0.5))
+        # print(p)
+        # ifh.success("Cnetplot created.")
+        #
+        # ifh.step("Create KEGG ridgeplot...")
+        # p <- ridgeplot(kegg.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
+        # print(p)
+        # ifh.success("Ridgeplot created.")
+        #
+        # ifh.step("Create KEGG gseaplot...")
+        # p <- gseaplot(kegg.gse, by = "all", title = kegg.gse$Description[1], geneSetID = 1) + theme(axis.text.y = element_text(size=8), axis.text.x = element_text(size=8))
+        # print(p)
+        # ifh.success("Gseaplot created.")
 
 
         # Display KEGG pathview (currently disabled)
