@@ -16,7 +16,7 @@ config <- data.frame(
     # Keytype: source of annotation
     key.type = "ENSEMBL",
     # ont: "BP", "MF", "CC", "ALL"
-    ont = "ALL",
+    ont = "CC",
     # Number of permutations
     num.perm = 10000,
     # Minimum number of genes in set
@@ -43,7 +43,7 @@ config <- data.frame(
 )
 
 # Change configuration for e.coli K12 based on eggNOG-mapper output
-if (FALSE) {
+if (TRUE) {
     config$organism.db <- "org.EcK12.eg.db"
     config$go.map <- "geneid-to-go.csv"
     config$go.toType <- "GENENAME"
@@ -62,7 +62,7 @@ main <- function() {
     # Initialize and install dependencies
     ifh.info("Check and install missing dependencies...")
     ifh.init(c("clusterProfiler", "pathview", "enrichplot",
-               "DOSE", "ggridges", "ggplot2", "tools"), quiet = config$quiet)
+               "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db"), quiet = config$quiet)
 
     # Create CLI argument parser
     option_list = list(
@@ -255,6 +255,8 @@ main <- function() {
 
             if (opt$go_map != "") {
                 go.supported.ids <- select(org.EcK12.eg.db, keys(org.EcK12.eg.db, "GO"), "ENTREZID", "GO")[,'GO']
+                go.ids.in.ont <- filterGOByOntology(go.supported.ids, ontology = c(opt$ont))
+                go.supported.ids <- go.supported.ids[go.ids.in.ont == TRUE]
                 go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.supported.ids,]
                 go.term.to.name <- go2term(go.geneid.df[,1])
                 names(go.term.to.name) <- c('GO', 'NAME')
@@ -394,7 +396,7 @@ main <- function() {
     # Plot KEGG GSE results
     if (!opt$no_kyoto_genes) {
         ifh.step("Create KEGG dotplot...")
-        p <- dotplot(kegg.gse, showCategory = 10, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
+        p <- dotplot(kegg.gse, showCategory = 20, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
         ifh.success("Dotplot created.")
 
