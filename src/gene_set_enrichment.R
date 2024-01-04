@@ -505,23 +505,23 @@ main <- function() {
         {
             ifh.info("Create image..")
             msg <- capture.output(pathview::pathview(...), type = "message")
-              #msg <- grep("image file", msg, value = T)
-              #filename <- sapply(strsplit(msg, " "), function(x) x[length(x)])
-# 
-#               img <- png::readPNG(filename)
-#               grid::grid.raster(img)
-# 
-#               filename2 = gsub("\\.pathview", "", filename)
-#               img2 <- png::readPNG(filename2)
-#               grid::grid.raster(img2)
-# 
-#               filename3 = gsub("\\.png", ".xml", filename2)
-# 
-#               if(!save) {
-#                   invisible(file.remove(filename))
-#                   invisible(file.remove(filename2))
-#                   invisible(file.remove(filename3))
-#               }
+            msg <- grep("image file", msg, value = T)
+            filename <- sapply(strsplit(msg, " "), function(x) x[length(x)])
+
+              img <- png::readPNG(filename)
+              grid::grid.raster(img)
+
+              filename2 = gsub("\\.pathview", "", filename)
+              img2 <- png::readPNG(filename2)
+              grid::grid.raster(img2)
+
+              filename3 = gsub("\\.png", ".xml", filename2)
+
+              if(!save) {
+                  invisible(file.remove(filename))
+                  invisible(file.remove(filename2))
+                  invisible(file.remove(filename3))
+              }
         }
         
         ifh.step("Create KEGG pathview...")

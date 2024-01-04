@@ -1,0 +1,359 @@
+# Set options
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
+```
+
+# Load IfH utility library
+
+```{r}
+install.packages("../deps/ifhutil", repos = NULL, type = "source")
+library(ifhutil)
+ifh.init(c('numbers'), quiet = TRUE)
+```
+
+# Set path to `out.emapper.annotations` file from eggNOG
+
+```{r}
+annotated.file <- '../private/out.emapper.annotations'
+```
+
+# Generate mappings from eggNOG output
+
+```{r}
+# Read eggNOG-mapper annotation table
+ifh.info('Read all inputs...')
+annotated.df <- ifh.table.import(annotated.file, header = FALSE, sep = '\t', comment.char = '#', strip.white = TRUE, quote = '')
+colnames(annotated.df) <- ifh.file.get.line(path = annotated.file, prefix = '#', comment.prefix = '##', sep = '\t')
+
+# Rename 'query' to 'GENEID' for GSE
+colnames(annotated.df)[colnames(annotated.df) == 'query'] <- 'GENEID'
+colnames(annotated.df)[colnames(annotated.df) == 'Preferred_name'] <- 'PreferredName'
+ifh.success('Annotated inputs loaded.')
+
+# Expand the table based on 'GOs' and export to CSV
+geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID', 'PreferredName'), na = '-')
+ifh.table.export(geneid.to.go, 'geneid-to-go.csv', row.names = FALSE)
+
+# Expand the table based on 'KEGG_ko' and export to CSV
+geneid.to.kegg <- ifh.table.expand(annotated.df, by = 'KEGG_ko', split = ',', limit.to = c('GENEID', 'PreferredName'), remove.prefix = 'ko:', na = '-')
+ifh.table.export(geneid.to.kegg, 'geneid-to-kegg.csv', row.names = FALSE)
+```
+
+# Perform Gene-Set-Enrichment
+
+This section describes all necessary steps to perform GSE for GO and KEGG.
+
+## Create configuration
+
+```{r}
+# Setup default configuration
+config <- data.frame(
+    # Prevent any output
+    quiet = TRUE,
+    # Organism annotation database
+    organism.annotation = "org.EcK12.eg.db",
+    # Input file
+    deseq.file = "../private/L12VLB12_MGaccession.csv",
+    # Keytype: source of annotation
+    key.type = "GO",
+    # ont: "BP", "MF", "CC", "ALL"
+    ont = "CC",
+    # Number of permutations
+    num.perm = 10000,
+    # Minimum number of genes in set
+    min.gs.size = 3,
+    # Maximum number of genes in set
+    max.gs.size = 800,
+    # pvalue cutoff
+    pvalue.cutoff = 0.05,
+    # padjust method: "holm", "hochberg", "hommel", "bonferroni",
+    #                 "BH", "BY", "fdr", "none"
+    padjust.method = "none",
+    # KEGG organism code, see https://www.genome.jp/kegg/catalog/org_list.html
+    kegg.code = "ecok",
+    # KEGG key type
+    kegg.key.type = "kegg",
+    # GO Map
+    go.map = "geneid-to-go.csv",
+    # KEGG Map
+    kegg.map = "geneid-to-kegg.csv",
+    # Count of categories to plot
+    show.categories = 10000,
+    # Pathway ID
+    pathway.id = "ecok00010",
+    pathway.gene.idtype = "KEGG"
+)
+```
+
+## Install annotation database
+
+```{r}
+# Install/Load organism annotations
+ifh.info("Load organism annotation...")
+ifh.install(pkg = config$organism.annotation, quiet = config$quiet)
+ifh.success("Organism annotation loaded.")
+```
+
+### List available keytypes
+
+```{r}
+ifh.info("Possible keytypes for", config$organism.annotation, ":")
+ifh.info(keytypes(get(config$organism.annotation)))
+```
+
+
+## Load DESEQ CSV file
+
+```{r}
+# Read DESeq2 data
+ifh.step("Load CSV data from", config$deseq.file, "...")
+deseq2.df = ifh.table.import(config$deseq.file, header = TRUE, sep = ",")
+ifh.success("Data loaded.")
+
+ifh.step("Prepare gene list...")
+orig.gene.list <- deseq2.df$log2FoldChange
+names(orig.gene.list) <- deseq2.df$X
+gene.list <- na.omit(orig.gene.list)
+gene.list <- sort(gene.list, decreasing = TRUE)
+ifh.success("Gene list prepared.")
+```
+
+## Execute GO GSE
+
+### Load required libraries
+```{r}
+# Initialize and install dependencies
+ifh.info("Check and install missing dependencies...")
+ifh.init(c("clusterProfiler", "pathview", "enrichplot", "gridExtra",
+           "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db", "HDO.db"), quiet = config$quiet)
+```
+
+### Perform GO GSE
+
+```{r}
+# Load cache file or import go-geneid mapping frame
+go.geneid.df <- NA
+if (config$go.map!= "") {
+    ifh.info("Import GO map from", config$go.map)
+    go.geneid.df <- ifh.table.import(config$go.map, header = TRUE, sep = "\t", comment.char = "#")
+    ifh.success("GO map imported.")
+}
+
+# Run GO GSE with organism database or custom GO-GENEID mapping
+ifh.step("Calculate GO gene set enrichment...")
+ifh.quiet(config$quiet)
+go.gse = NA
+go.gene.list = NA
+
+#if (config$go.map != "") {
+    go.supported.ids <- select(get(config$organism.annotation), keys(get(config$organism.annotation), "GO"), "ENTREZID", "GO")[,'GO']
+    go.ids.in.ont <- filterGOByOntology(go.supported.ids, ontology = c(config$ont))
+    go.supported.ids <- go.supported.ids[go.ids.in.ont == TRUE]
+    go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.supported.ids,]
+    go.term.to.name <- go2term(go.geneid.df[,1])
+    names(go.term.to.name) <- c('GO', 'NAME')
+
+    go.gene.list <- gene.list
+
+    go.gse = suppressMessages({
+        GSEA(geneList = go.gene.list,
+             exponent = 1,
+             minGSSize = config$min.gs.size,
+             maxGSSize = config$max.gs.size,
+             pvalueCutoff = config$pvalue.cutoff,
+             pAdjustMethod = config$padjust.method,
+             verbose = FALSE,
+             eps = 0,
+             TERM2GENE = go.term.to.gene,
+             TERM2NAME = go.term.to.name,
+             by = "fgsea"
+             )
+    })
+    
+    convert_go_to_pref_name <- function(val, conversion_table) {
+        values <- conversion_table$PreferredName[conversion_table$GENEID %in% val]
+        values <- unique(values)
+        return(paste(values, collapse = ',', sep = ','))
+    }
+    
+    #mapping
+    convert_list_go_to_pref_name <- function(list, conversion_table) {
+        vec <- unlist(strsplit(list, "/"))
+        gene_names <- sapply(vec, convert_go_to_pref_name, conversion_table = conversion_table)
+        return(paste(gene_names, collapse = "/"))
+    }
+    
+    #extract the dataframe from enrichKEGG object
+    temp_df = go.gse@result
+    
+    #replace the IDs with sapply
+    temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_go_to_pref_name, conversion_table = go.geneid.df)
+    
+    #modify the result table
+    go.gse@result = temp_df
+    
+    for (key in names(go.gse@geneSets)) {
+        go.gse@geneSets[key] <- sapply(go.gse@geneSets[key], convert_go_to_pref_name, conversion_table = go.geneid.df)
+    }
+    
+    names(go.gse@geneList) <- sapply(names(go.gse@geneList), convert_go_to_pref_name, conversion_table = go.geneid.df)
+    names(go.gene.list) <- sapply(names(go.gene.list), convert_go_to_pref_name, conversion_table = go.geneid.df)
+#} else {
+#     go.gene.list <- gene.list
+#     go.gse = suppressMessages({
+#         gseGO(geneList = go.gene.list,
+#               ont = config$ont,
+#               keyType = config$key.type,
+#               #nPerm = 10000,
+#               minGSSize = config$min.gs.size,
+#               maxGSSize = config$max.gs.size,
+#               pvalueCutoff = config$pvalue.cutoff,
+#               verbose = FALSE,
+#               OrgDb = config$organism.annotation,
+#               pAdjustMethod = config$padjust.method)})
+# }
+ifh.quiet(FALSE)
+ifh.step("Calculations for GO GSE finished.")
+```
+
+#### Plot GO GSE results
+
+```{r}
+ifh.step("Create GO dotplot...")
+pdf("go.dotplot.pdf",width=12,height=8)
+p <- dotplot(go.gse, showCategory = config$show.categories, split = ".sign", font.size=8) + facet_grid(.~.sign)
+p
+dev.off()
+ifh.success("Dotplot created.")
+
+ifh.step("Create GO cnetplot...")
+pdf("go.cnetplot.pdf",width=24,height=16)
+cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=go.gene.list), showCategory = config$show.categories, colorEdge = TRUE, cex.params = list(category_label = 0.7, gene_label = 0.5))
+dev.off()
+ifh.success("Cnetplot created.")
+
+ifh.step("Create GO heatplot...")
+pdf("go.heatplot.pdf",width=70,height=18)
+heatplot(go.gse, foldChange=go.gene.list, showCategory = config$show.categories)
+dev.off()
+ifh.success("Heatplot created.")
+```
+
+### Perform KEGG GSE
+
+```{r}
+# Load cache file or import KEGG-geneid mapping frame
+kegg.geneid.df <- NA
+if (config$kegg.map != "") {
+    ifh.info("Import KEGG map from", config$kegg.map)
+    kegg.geneid.df <- ifh.table.import(config$kegg.map, header = TRUE, sep = "\t", comment.char = "#")
+    ifh.success("KEGG map imported.")
+}
+
+ifh.step("Prepare KEGG gene list...")
+ifh.quiet(config$quiet)
+
+# Run KEGG GSE with organism database or custom KEGG_ko-GENEID mapping
+if (config$kegg.map != "") {
+    kegg.df.unique.ids = kegg.geneid.df[!duplicated(kegg.geneid.df[c("GENEID")]),]
+    deseq2.df = deseq2.df[deseq2.df$X %in% kegg.df.unique.ids[["GENEID"]],]
+    kegg.df.unique.ids = kegg.df.unique.ids[kegg.df.unique.ids$GENEID %in% deseq2.df$X,]
+    deseq2.df$Y = kegg.df.unique.ids$KEGG_ko
+    
+    kegg.gene.list <- deseq2.df$log2FoldChange
+    names(kegg.gene.list) <- deseq2.df$Y
+    kegg.gene.list <- na.omit(kegg.gene.list)
+    kegg.gene.list = sort(kegg.gene.list, decreasing = TRUE)
+    ifh.success("KEGG gene list prepared.")
+
+    ifh.step("Calculate KEGG gene set enrichment...")
+    kegg.gse <- gseKEGG(geneList = kegg.gene.list,
+                        organism = "ko",
+                        #nPerm = 10000,
+                        minGSSize = config$min.gs.size,
+                        maxGSSize = config$max.gs.size,
+                        pvalueCutoff = config$pvalue.cutoff,
+                        pAdjustMethod = config$padjust.method,
+                        keyType = config$kegg.key.type,
+                        eps = 0)
+    
+    convert_kegg_to_pref_name <- function(val, conversion_table) {
+        values <- conversion_table$PreferredName[conversion_table$KEGG_ko %in% val]
+        values <- unique(values) 
+        return(paste(values, collapse = ',', sep = ','))
+    }
+    
+    #mapping
+    convert_list_kegg_to_pref_name <- function(list, conversion_table) {
+        vec <- unlist(strsplit(list, "/"))
+        gene_names <- sapply(vec, convert_kegg_to_pref_name, conversion_table = conversion_table)
+        return(paste(gene_names, collapse = "/"))
+    }
+    
+    #extract the dataframe from enrichKEGG object
+    temp_df = kegg.gse@result
+    
+    #replace the IDs with sapply
+    temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+    
+    #modify the result table
+    kegg.gse@result = temp_df
+    
+    for (key in names(kegg.gse@geneSets)) {
+        kegg.gse@geneSets[key] <- sapply(kegg.gse@geneSets[key], convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+    }
+    
+    names(kegg.gse@geneList) <- sapply(names(kegg.gse@geneList), convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+} else {
+    ids <- bitr(names(orig.gene.list), fromType = config$key.type, toType = "ENTREZID", OrgDb = config$organism.annotation)
+
+    kegg.df.unique.ids = ids[!duplicated(ids[c(config$key.type)]),]
+    deseq2.df = deseq2.df[deseq2.df$X %in% kegg.df.unique.ids[[config$key.type]],]
+    deseq2.df$Y = kegg.df.unique.ids$ENTREZID
+
+    kegg.gene.list <- deseq2.df$log2FoldChange
+    names(kegg.gene.list) <- deseq2.df$Y
+    kegg.gene.list <- na.omit(kegg.gene.list)
+    kegg.gene.list = sort(kegg.gene.list, decreasing = TRUE)
+    ifh.success("KEGG gene list prepared.")
+
+    ifh.step("Calculate KEGG gene set enrichment...")
+    kegg.gse <- gseKEGG(geneList = kegg.gene.list,
+                        organism = config$kegg.code,
+                        #nPerm = 10000,
+                        minGSSize = config$min.gs.size,
+                        maxGSSize = config$max.gs.size,
+                        pvalueCutoff = config$pvalue.cutoff,
+                        pAdjustMethod = config$padjust.method,
+                        keyType = config$kegg.key.type)
+}
+ifh.quiet(FALSE)
+ifh.step("Calculations for KEGG GSE finished.")
+```
+
+#### Plot KEGG GSE results
+
+```{r}
+ifh.step("Create KEGG dotplot...")
+pdf("kegg.dotplot.pdf",width=12,height=8)
+dotplot(kegg.gse, showCategory = config$show.categories, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
+dev.off()
+ifh.success("Dotplot created.")
+
+ifh.step("Create KEGG cnetplot...")
+pdf("kegg.cnetplot.pdf",width=36,height=12)
+cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange = kegg.gse@geneList, edge = TRUE), showCategory = config$show.categories, cex.params = list(category_label = 0.7, gene_label = 0.5))
+dev.off()
+ifh.success("Cnetplot created.")
+
+ifh.step("Create KEGG heatplot...")
+pdf("kegg.heatplot.pdf",width=50,height=16)
+heatplot(kegg.gse, foldChange=kegg.gse@geneList, showCategory = config$show.categories)
+dev.off()
+ifh.success("Heatplot created.")
+
+ifh.step("Create KEGG pathview...")
+pathview(cpd.data=kegg.gene.list, pathway.id = config$pathway.id, species = config$kegg.code, gene.idtype = config$pathway.gene.idtype)
+ifh.success("Pathview created.")
+```
