@@ -39,7 +39,9 @@ config <- data.frame(
     # Run Gene Ontology
     run.go = TRUE,
     # Run KEGG
-    run.kegg = TRUE
+    run.kegg = TRUE,
+    # Count of categories to plot
+    show.categories = 30
 )
 
 # Change configuration for e.coli K12 based on eggNOG-mapper output
@@ -47,7 +49,7 @@ if (TRUE) {
     config$organism.db <- "org.EcK12.eg.db"
     config$go.map <- "geneid-to-go.csv"
     config$go.toType <- "GENENAME"
-    config$ont <- "MF"
+    config$ont <- "BP"
     config$kegg.map <- "geneid-to-kegg.csv"
     config$input.file <- "./private/L12VLB12_MGaccession.csv"
     config$key.type <- "GO"
@@ -61,7 +63,7 @@ if (TRUE) {
 main <- function() {
     # Initialize and install dependencies
     ifh.info("Check and install missing dependencies...")
-    ifh.init(c("clusterProfiler", "pathview", "enrichplot",
+    ifh.init(c("clusterProfiler", "pathview", "enrichplot", "gridExtra",
                "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db"), quiet = config$quiet)
 
     # Create CLI argument parser
@@ -146,7 +148,12 @@ main <- function() {
                     type = "character",
                     default = config$kegg.key.type,
                     help = "The kegg key type.",
-                    metavar = "KEY")
+                    metavar = "KEY"),
+        make_option(c("--show_categories"),
+                    type = "integer",
+                    default = config$show.categories,
+                    help = "The count of categories to plot.",
+                    metavar = "N")
     )
     opt_parser = OptionParser(option_list = option_list)
     opt = ifh.parse_args(opt_parser)
@@ -277,6 +284,7 @@ main <- function() {
                          by = "fgsea"
                          )
                 })
+                
             } else {
                 go.gene.list <- gene.list
                 go.gse = suppressMessages({
@@ -361,7 +369,7 @@ main <- function() {
     # Plot GO GSE results
     if (!opt$no_gene_ontology) {
         ifh.step("Create GO dotplot...")
-        p <- dotplot(go.gse, showCategory = 20, split = ".sign", font.size=8) + facet_grid(.~.sign)
+        p <- dotplot(go.gse, showCategory = opt$show_categories, split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
         ifh.success("Dotplot created.")
 
@@ -371,10 +379,16 @@ main <- function() {
         # print(p)
         # ifh.success("Emapplot created.")
         #
-        # ifh.step("Create GO cnetplot...")
-        # p <- cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=go.gene.list), showCategory = 3, cex.params = list(category_label = 0.7, gene_label = 0.5))
-        # print(p)
-        # ifh.success("Cnetplot created.")
+        ifh.step("Create GO cnetplot...")
+        p <- cnetplot(go.gse, categorySize="pvalue", color.params = list(foldChange=go.gene.list), showCategory = opt$show_categories, colorEdge = TRUE, cex.params = list(category_label = 0.7, gene_label = 0.5))
+        print(p)
+        ifh.success("Cnetplot created.")
+        
+        ifh.step("Create GO heatplot...")
+        p <- heatplot(go.gse, foldChange=go.gene.list, showCategory = opt$show_categories)
+        print(p)
+        ifh.success("Heatplot created.")
+        
         #
         # ifh.step("Create GO ridgeplot...")
         # p <- ridgeplot(go.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
@@ -396,7 +410,7 @@ main <- function() {
     # Plot KEGG GSE results
     if (!opt$no_kyoto_genes) {
         ifh.step("Create KEGG dotplot...")
-        p <- dotplot(kegg.gse, showCategory = 20, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
+        p <- dotplot(kegg.gse, showCategory = opt$show_categories, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
         print(p)
         ifh.success("Dotplot created.")
 
@@ -406,10 +420,16 @@ main <- function() {
         # print(p)
         # ifh.success("Emapplot created.")
         #
-        # ifh.step("Create KEGG cnetplot...")
-        # p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=kegg.gene.list), cex.params = list(category_label = 0.7, gene_label = 0.5))
-        # print(p)
-        # ifh.success("Cnetplot created.")
+        ifh.step("Create KEGG cnetplot...")
+        p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=kegg.gene.list), showCategory = opt$show_categories, colorEdge = TRUE, cex.params = list(category_label = 0.7, gene_label = 0.5))
+        print(p)
+        ifh.success("Cnetplot created.")
+        
+        ifh.step("Create KEGG heatplot...")
+        p <- heatplot(kegg.gse, foldChange=kegg.gene.list, showCategory = opt$show_categories)
+        print(p)
+        ifh.success("Heatplot created.")
+        
         #
         # ifh.step("Create KEGG ridgeplot...")
         # p <- ridgeplot(kegg.gse) + labs(x = "enrichment distribution") + theme(axis.text.y = element_text(size=5), axis.text.x = element_text(size=8))
