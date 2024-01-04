@@ -2,6 +2,10 @@
 
 This repository contains the script and environment to perform GO and KEGG enrichment analysis and generate plots based on DESeq2 input data. The concepts are based on the [GeneSetEnrichment Guide](https://learn.gencore.bio.nyu.edu/rna-seq-analysis/gene-set-enrichment-analysis/) from the [New York University](https://www.nyu.edu/).
 
+# Quickstart
+
+If you prefer to use the interactive mode provided by R markdown files, you can use the `./src/gene_set_enrichment.Rmd` file in your RStudio session and just proceed chunk by chunk.
+
 # Requirements
 
 To simplify the scripts and minimize code duplication, the package `ifhutil` is created. You can find it in `./deps/ifhutil`. Since the scripts in `./src/` depend on the library, you have to install it beforehand. To install the library, just execute the command below in your `R` shell.
