@@ -487,10 +487,16 @@ ifh.table.expand <- function(table, by, split = ",", na = "", limit.to = vector(
                 value <- strsplit(value, split = remove.prefix)[[1]][2]
             }
             # Write new row
-            if (is.na(value) || value == na) {
-                writeLines(paste(NA, table[i, limit.to], sep = sep, collapse = sep), output)
-            } else {
-                writeLines(paste(value, table[i, limit.to], sep = sep, collapse = sep), output)
+            if (!is.na(value) && value != na) {
+                line <- ''
+                for (c in limit.to) {
+                    if (line == '') {
+                        line <- table[i, c]
+                    } else {
+                        line <- paste(line, table[i, c], sep = sep, collapse = sep)
+                    }
+                }
+                writeLines(paste(value, line, sep = sep, collapse = sep), output)
             }
         }
 
@@ -500,7 +506,7 @@ ifh.table.expand <- function(table, by, split = ",", na = "", limit.to = vector(
     close(output)
 
     # Now read the expanded table
-    data <- read.csv(filepath, header = TRUE, sep = sep)
+    data <- read.csv(filepath, header = TRUE, sep = sep, row.names = NULL)
     # Remove the cache file
     file.remove(filepath)
     # Inform user of expansion size
@@ -526,7 +532,7 @@ ifh.table.expand <- function(table, by, split = ",", na = "", limit.to = vector(
 #' @export
 ifh.table.export <- function(table, file, row.names = FALSE, quote = FALSE, sep = "\t", ...) {
     .GlobalEnv$ifh.info("Export table to", file)
-    write.table(table, file = file, row.names = row.names, quote = quote, sep = sep, ...)
+    write.table(table, file = file, row.names = FALSE, quote = quote, sep = sep, ...)
     .GlobalEnv$ifh.success("Export completed.")
 }
 

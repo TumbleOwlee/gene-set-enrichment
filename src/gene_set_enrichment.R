@@ -41,7 +41,7 @@ config <- data.frame(
     # Run KEGG
     run.kegg = TRUE,
     # Count of categories to plot
-    show.categories = 30
+    show.categories = 10000
 )
 
 # Change configuration for e.coli K12 based on eggNOG-mapper output
@@ -285,6 +285,34 @@ main <- function() {
                          )
                 })
                 
+                convert_go_to_pref_name <- function(val, conversion_table) {
+                    values <- conversion_table$PreferredName[conversion_table$GENEID %in% val]
+                    values <- unique(values)
+                    return(paste(values, collapse = ',', sep = ','))
+                }
+                
+                #mapping
+                convert_list_go_to_pref_name <- function(list, conversion_table) {
+                    vec <- unlist(strsplit(list, "/"))
+                    gene_names <- sapply(vec, convert_go_to_pref_name, conversion_table = conversion_table)
+                    return(paste(gene_names, collapse = "/"))
+                }
+                
+                #extract the dataframe from enrichKEGG object
+                temp_df = go.gse@result
+                
+                #replace the IDs with sapply
+                temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_go_to_pref_name, conversion_table = go.geneid.df)
+                
+                #modify the result table
+                go.gse@result = temp_df
+                
+                for (key in names(go.gse@geneSets)) {
+                    go.gse@geneSets[key] <- sapply(go.gse@geneSets[key], convert_go_to_pref_name, conversion_table = go.geneid.df)
+                }
+                
+                names(go.gse@geneList) <- sapply(names(go.gse@geneList), convert_go_to_pref_name, conversion_table = go.geneid.df)
+                names(go.gene.list) <- sapply(names(go.gene.list), convert_go_to_pref_name, conversion_table = go.geneid.df)
             } else {
                 go.gene.list <- gene.list
                 go.gse = suppressMessages({
@@ -317,7 +345,7 @@ main <- function() {
                 deseq2.df = deseq2.df[deseq2.df$X %in% kegg.df.unique.ids[["GENEID"]],]
                 kegg.df.unique.ids = kegg.df.unique.ids[kegg.df.unique.ids$GENEID %in% deseq2.df$X,]
                 deseq2.df$Y = kegg.df.unique.ids$KEGG_ko
-
+                
                 kegg.gene.list <- deseq2.df$log2FoldChange
                 names(kegg.gene.list) <- deseq2.df$Y
                 kegg.gene.list <- na.omit(kegg.gene.list)
@@ -334,6 +362,34 @@ main <- function() {
                                     pAdjustMethod = opt$padjust_method,
                                     keyType = opt$kegg_keytype,
                                     eps = 0)
+                
+                convert_kegg_to_pref_name <- function(val, conversion_table) {
+                    values <- conversion_table$PreferredName[conversion_table$KEGG_ko %in% val]
+                    values <- unique(values) 
+                    return(paste(values, collapse = ',', sep = ','))
+                }
+                
+                #mapping
+                convert_list_kegg_to_pref_name <- function(list, conversion_table) {
+                    vec <- unlist(strsplit(list, "/"))
+                    gene_names <- sapply(vec, convert_kegg_to_pref_name, conversion_table = conversion_table)
+                    return(paste(gene_names, collapse = "/"))
+                }
+                
+                #extract the dataframe from enrichKEGG object
+                temp_df = kegg.gse@result
+                
+                #replace the IDs with sapply
+                temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+                
+                #modify the result table
+                kegg.gse@result = temp_df
+                
+                for (key in names(kegg.gse@geneSets)) {
+                    kegg.gse@geneSets[key] <- sapply(kegg.gse@geneSets[key], convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+                }
+                
+                names(kegg.gse@geneList) <- sapply(names(kegg.gse@geneList), convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
             } else {
                 ids <- bitr(names(orig.gene.list), fromType = opt$keytype, toType = "ENTREZID", OrgDb = opt$organism_annotation)
 
@@ -421,12 +477,13 @@ main <- function() {
         # ifh.success("Emapplot created.")
         #
         ifh.step("Create KEGG cnetplot...")
-        p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=kegg.gene.list), showCategory = opt$show_categories, colorEdge = TRUE, cex.params = list(category_label = 0.7, gene_label = 0.5))
+        
+        p <- cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange=kegg.gse@geneList), showCategory = opt$show_categories, colorEdge = TRUE, cex.params = list(category_label = 0.7, gene_label = 0.5))
         print(p)
         ifh.success("Cnetplot created.")
         
         ifh.step("Create KEGG heatplot...")
-        p <- heatplot(kegg.gse, foldChange=kegg.gene.list, showCategory = opt$show_categories)
+        p <- heatplot(kegg.gse, foldChange=kegg.gse@geneList, showCategory = opt$show_categories)
         print(p)
         ifh.success("Heatplot created.")
         
@@ -443,33 +500,35 @@ main <- function() {
 
 
         # Display KEGG pathview (currently disabled)
-        #
-        #   show.pathview <- function(..., save = FALSE)
-        #   {
-        #       msg <- capture.output(pathview::pathview(...), type = "message")
-        #       msg <- grep("image file", msg, value = T)
-        #       filename <- sapply(strsplit(msg, " "), function(x) x[length(x)])
-        #
-        #       img <- png::readPNG(filename)
-        #       grid::grid.raster(img)
-        #
-        #       filename2 = gsub("\\.pathview", "", filename)
-        #       img2 <- png::readPNG(filename2)
-        #       grid::grid.raster(img2)
-        #
-        #       filename3 = gsub("\\.png", ".xml", filename2)
-        #
-        #       if(!save) {
-        #           invisible(file.remove(filename))
-        #           invisible(file.remove(filename2))
-        #           invisible(file.remove(filename3))
-        #       }
-        #   }
-        #
-        #
-        #   step("Create KEGG pathview...")
-        #   show_pathview(gene.data=kegg.gene.list, pathway.id="dme04130", species = opt$kegg_code)
-        #   success("Pathview created.")
+    
+        show.pathview <- function(..., save = FALSE)
+        {
+            ifh.info("Create image..")
+            msg <- capture.output(pathview::pathview(...), type = "message")
+              #msg <- grep("image file", msg, value = T)
+              #filename <- sapply(strsplit(msg, " "), function(x) x[length(x)])
+# 
+#               img <- png::readPNG(filename)
+#               grid::grid.raster(img)
+# 
+#               filename2 = gsub("\\.pathview", "", filename)
+#               img2 <- png::readPNG(filename2)
+#               grid::grid.raster(img2)
+# 
+#               filename3 = gsub("\\.png", ".xml", filename2)
+# 
+#               if(!save) {
+#                   invisible(file.remove(filename))
+#                   invisible(file.remove(filename2))
+#                   invisible(file.remove(filename3))
+#               }
+        }
+        
+        ifh.step("Create KEGG pathview...")
+        
+        show.pathview(gene.data=kegg.gene.list, pathway.id="ko04130", gene.idtype = "KEGG", species = opt$kegg_code)
+        #show.pathview(gene.data=kegg.gene.list, pathway.id="ko04130")#, species = opt$kegg_code)
+        ifh.success("Pathview created.")
     }
 }
 
@@ -477,6 +536,7 @@ main <- function() {
 
 suppressMessages({library(ifhutil)})
 
-ifh.run({main()})
+#ifh.run({main()})
+main()
 
 ###############################################################################
