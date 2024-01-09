@@ -1,5 +1,7 @@
 # GeneSetEnrichment
 
+[![Singularity Build](https://github.com/TumbleOwlee/gene-set-enrichment/actions/workflows/singularity.yml/badge.svg?branch=main)](https://github.com/TumbleOwlee/gene-set-enrichment/actions/workflows/singularity.yml)
+
 This repository contains the script and environment to perform GO and KEGG enrichment analysis and generate plots based on DESeq2 input data. The concepts are based on the [GeneSetEnrichment Guide](https://learn.gencore.bio.nyu.edu/rna-seq-analysis/gene-set-enrichment-analysis/) from the [New York University](https://www.nyu.edu/).
 
 # Quickstart
