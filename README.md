@@ -8,10 +8,10 @@ If you prefer to use the interactive mode provided by R markdown files, you can 
 
 # Requirements
 
-To simplify the scripts and minimize code duplication, the package `ifhutil` is created. You can find it in `./deps/ifhutil`. Since the scripts in `./src/` depend on the library, you have to install it beforehand. To install the library, just execute the command below in your `R` shell.
+To simplify the scripts and minimize code duplication, the package `ifutil` is used heavily. You can find it [here](https://github.com/tumbleowlee/ifutil). You can install it easily by executing the following command in your `R` shell.
 
 ```R
-> install.packages("deps/ifhutil", repos = NULL, type = "local")
+> remotes::install_github("tumbleowlee/ifhutil")
 ```
 
 Afterwards you should be able to load the library with `library(ifhutil)`. Documentation for each provided function is also added, thus you can check out `?ifh.<function>` easily.

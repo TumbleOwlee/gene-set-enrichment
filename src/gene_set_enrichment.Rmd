@@ -7,7 +7,7 @@ knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
 # Load IfH utility library
 
 ```{r}
-install.packages("../deps/ifhutil", repos = NULL, type = "source")
+remotes::install_github("tumbleowlee/ifhutil")
 library(ifhutil)
 ifh.init(c('numbers'), quiet = TRUE)
 ```
@@ -170,33 +170,33 @@ go.gene.list = NA
              by = "fgsea"
              )
     })
-    
+
     convert_go_to_pref_name <- function(val, conversion_table) {
         values <- conversion_table$PreferredName[conversion_table$GENEID %in% val]
         values <- unique(values)
         return(paste(values, collapse = ',', sep = ','))
     }
-    
+
     #mapping
     convert_list_go_to_pref_name <- function(list, conversion_table) {
         vec <- unlist(strsplit(list, "/"))
         gene_names <- sapply(vec, convert_go_to_pref_name, conversion_table = conversion_table)
         return(paste(gene_names, collapse = "/"))
     }
-    
+
     #extract the dataframe from enrichKEGG object
     temp_df = go.gse@result
-    
+
     #replace the IDs with sapply
     temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_go_to_pref_name, conversion_table = go.geneid.df)
-    
+
     #modify the result table
     go.gse@result = temp_df
-    
+
     for (key in names(go.gse@geneSets)) {
         go.gse@geneSets[key] <- sapply(go.gse@geneSets[key], convert_go_to_pref_name, conversion_table = go.geneid.df)
     }
-    
+
     names(go.gse@geneList) <- sapply(names(go.gse@geneList), convert_go_to_pref_name, conversion_table = go.geneid.df)
     names(go.gene.list) <- sapply(names(go.gene.list), convert_go_to_pref_name, conversion_table = go.geneid.df)
 #} else {
@@ -260,7 +260,7 @@ if (config$kegg.map != "") {
     deseq2.df = deseq2.df[deseq2.df$X %in% kegg.df.unique.ids[["GENEID"]],]
     kegg.df.unique.ids = kegg.df.unique.ids[kegg.df.unique.ids$GENEID %in% deseq2.df$X,]
     deseq2.df$Y = kegg.df.unique.ids$KEGG_ko
-    
+
     kegg.gene.list <- deseq2.df$log2FoldChange
     names(kegg.gene.list) <- deseq2.df$Y
     kegg.gene.list <- na.omit(kegg.gene.list)
@@ -277,33 +277,33 @@ if (config$kegg.map != "") {
                         pAdjustMethod = config$padjust.method,
                         keyType = config$kegg.key.type,
                         eps = 0)
-    
+
     convert_kegg_to_pref_name <- function(val, conversion_table) {
         values <- conversion_table$PreferredName[conversion_table$KEGG_ko %in% val]
-        values <- unique(values) 
+        values <- unique(values)
         return(paste(values, collapse = ',', sep = ','))
     }
-    
+
     #mapping
     convert_list_kegg_to_pref_name <- function(list, conversion_table) {
         vec <- unlist(strsplit(list, "/"))
         gene_names <- sapply(vec, convert_kegg_to_pref_name, conversion_table = conversion_table)
         return(paste(gene_names, collapse = "/"))
     }
-    
+
     #extract the dataframe from enrichKEGG object
     temp_df = kegg.gse@result
-    
+
     #replace the IDs with sapply
     temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_kegg_to_pref_name, conversion_table = kegg.geneid.df)
-    
+
     #modify the result table
     kegg.gse@result = temp_df
-    
+
     for (key in names(kegg.gse@geneSets)) {
         kegg.gse@geneSets[key] <- sapply(kegg.gse@geneSets[key], convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
     }
-    
+
     names(kegg.gse@geneList) <- sapply(names(kegg.gse@geneList), convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
 } else {
     ids <- bitr(names(orig.gene.list), fromType = config$key.type, toType = "ENTREZID", OrgDb = config$organism.annotation)

@@ -1,9 +1,9 @@
 #!/usr/bin/env Rscript
 
-#' 
+#'
 #' Maintainer: David Loewe <49597367+TumbleOwlee@users.noreply.github.com>
 #' License: MIT
-#' 
+#'
 
 # Default Configuration
 config <- data.frame(
@@ -33,7 +33,7 @@ main <- function() {
     ifh.info('Read all inputs...')
     annotated.df <- ifh.table.import(opt$annotated, header = FALSE, sep = '\t', comment.char = '#', strip.white = TRUE, quote = '')
     colnames(annotated.df) <- ifh.file.get.line(path = opt$annotated, prefix = '#', comment.prefix = '##', sep = '\t')
-    
+
     # Rename 'query' to 'GENEID' for GSE
     colnames(annotated.df)[colnames(annotated.df) == 'query'] <- 'GENEID'
     colnames(annotated.df)[colnames(annotated.df) == 'Preferred_name'] <- 'PreferredName'
@@ -42,14 +42,15 @@ main <- function() {
     # Expand the table based on 'GOs' and export to CSV
     geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID', 'PreferredName'), na = '-')
     ifh.table.export(geneid.to.go, 'geneid-to-go.csv', row.names = FALSE)
-    
+
     # Expand the table based on 'KEGG_ko' and export to CSV
     geneid.to.kegg <- ifh.table.expand(annotated.df, by = 'KEGG_ko', split = ',', limit.to = c('GENEID', 'PreferredName'), remove.prefix = 'ko:', na = '-')
     ifh.table.export(geneid.to.kegg, 'geneid-to-kegg.csv', row.names = FALSE)
 }
 
 # Load library 'ifhutil'
-suppressMessages({library(ifhutil)})
+remotes::install_github("tumbleowlee/ifhutil")
+suppressmessages({library(ifhutil)})
 
 # Execute `main()` with prettified log
 ifh.run({main()})
