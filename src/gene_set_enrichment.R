@@ -9,6 +9,8 @@
 config <- data.frame(
     # Prevent any output
     quiet = TRUE,
+    # Phylogeny to filter by
+    phylogeny = "Bacteria;Enterobacterales;",
     # Organism annotation database
     organism.db = "org.Dm.eg.db",
     # Input file
@@ -69,7 +71,7 @@ main <- function() {
     # Initialize and install dependencies
     ifh.info("Check and install missing dependencies...")
     ifh.init(c("clusterProfiler", "pathview", "enrichplot", "gridExtra",
-               "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db"), quiet = config$quiet)
+               "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db", "KEGGREST"), quiet = config$quiet)
 
     # Create CLI argument parser
     option_list = list(
@@ -353,6 +355,27 @@ main <- function() {
         # Run KEGG GSE with organism database or custom KEGG_ko-GENEID mapping
         if (!opt$no_kyoto_genes) {
             ifh.step("Prepare KEGG gene list...")
+
+            org <- data.frame(keggList("organism"))
+            filtered_org = org[grep(config$phylogeny, org$phylogeny), ]
+            pathways_tot = vector()
+            
+            pb <- progress_bar$new(total = length(filtered_org$organism))
+            pb$tick(0)
+            
+            for (i in 1:length(filtered_org$organism))
+            {
+                try({
+                    pathways = keggLink("pathway", filtered_org[i,2])
+                    pathways = sub(paste(".*",filtered_org[i,2], sep = ""), "", pathways)
+                    pathways = unique(pathways)
+                    pathways_tot = append(pathways_tot,pathways)
+                    pathways_tot = unique(pathways_tot) 
+                })
+                pb$tick()
+            }
+            pathways_tot = paste0("K", pathways_tot)
+            geneid.to.kegg <- geneid.to.kegg[geneid.to.kegg$KEGG_ko %in% pathways_tot]
 
             ifh.quiet(opt$quiet)
             if (opt$kegg_map != "") {
