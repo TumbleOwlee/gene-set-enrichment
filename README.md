@@ -2,11 +2,32 @@
 
 [![Singularity Build](https://github.com/TumbleOwlee/gene-set-enrichment/actions/workflows/singularity.yml/badge.svg?branch=main)](https://github.com/TumbleOwlee/gene-set-enrichment/actions/workflows/singularity.yml)
 
-This repository contains the script and environment to perform GO and KEGG enrichment analysis and generate plots based on DESeq2 input data. The concepts are based on the [GeneSetEnrichment Guide](https://learn.gencore.bio.nyu.edu/rna-seq-analysis/gene-set-enrichment-analysis/) from the [New York University](https://www.nyu.edu/).
+This repository contains the R markdown file and environment to perform GO and KEGG enrichment analysis and generate plots based on DESeq2 input data. The concepts are based on the [GeneSetEnrichment Guide](https://learn.gencore.bio.nyu.edu/rna-seq-analysis/gene-set-enrichment-analysis/) from the [New York University](https://www.nyu.edu/) with various modification.
 
 # Quickstart
 
-If you prefer to use the interactive mode provided by R markdown files, you can use the `./src/gene_set_enrichment.Rmd` file in your RStudio session and just proceed chunk by chunk.
+The repository provides the R markdown file `./src/gene_set_enrichment.Rmd`. Just upload it to your R studio instance and execute the chunks. But keep in mind to update the configuration since the defaults are for my use case.
+
+# Configuration
+
+The configuration consists of multiple parameters. Each one has to be carefully chosen to work with your provided data and to generate the correct results.
+
+Parameters:
+* `quiet`: If true, this option just disables excessive logging to prevent terminal flood.
+* `organism.annotation`: This is the database to use for annotation retrieval. It's used by all functions provided by `clusterProfiler`.
+* `deseq.file`: Path to the DESeq2 file.
+* `annotated.file`: Path to the output file of eggNOG. Since we have to know the GO terms for the locus tags, we utilize the eggNOG service to provide them.
+* `locus.tag.map`: Path to the locus tag map. E.g. downloaded from [here](https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/299/455/GCF_000299455.1_ASM29945v1/) for `esl`. Check out [this](https://www.genome.jp/kegg/catalog/org_list.html) for other links.
+* `key.type`: Key type to use for annotation retrieval.
+* `ont`: The ontology to use. Can be either "BP", "MF", "CC" or "ALL".
+* `min.gs.size`: See `?gseGO` and `?gseKEGG`.
+* `max.gs.size`: See `?gseGO` and `?gseKEGG`.
+* `pvalue.cutoff`: See `?gseGO` and `?gseKEGG`.
+* `padjust.method`: See `?gseGO` and `?gseKEGG`.
+* `kegg.code`: The KEGG code as listed [here](https://www.genome.jp/kegg/catalog/org_list.html)
+* `show.categories`: Used to limit the number of elements in plots.
+* `pathway.id`: The pathway id for the pathview (see `?pathview`).
+* `pathway.gene.idtype`: The gene id type (see `?pathview`).
 
 # Requirements
 
@@ -66,28 +87,8 @@ Using the `IMAGE ID` (e.g. `e62ceaad5db5`) you can run a container and e.g. star
         mount . directory as /home/ in container
 ```
 
-# Workflow
-
-If you're working with a known bacteria or gene and you would like to perform gene set enrichment analysis (GSEA), you can look up the correct database from [Bioconductor](https://bioconductor.org/packages/release/BiocViews.html#___OrgDb) and just execute `./src/gene_set_enrichment.R` by providing the correct arguments. Please take a look at the help interface for details.
-
-If you're using [eggNOG-mapper](http://eggnog-mapper.embl.de/) to retrieve mappings of your custom identifiers to knwon GO/KEGG_ko terms, you can utilize `./src/eggnog_mapping_gen.R` to generate the necessary GENEID-GO and GENEID-KEGG_ko mapping tables. Executing `eggnog_mapping_gen.R` will create files `geneid-to-go.csv` and `geneid-to-kegg.csv` that can be passed to `gene_set_enrichment.R` as arguments for options `--go_map` and `--kegg_map` respectively. Afterwards you should get the plots for the analysis.
-
 ## Resources
 
 * List of available KEGG codes: [https://www.genome.jp/kegg/catalog/org_list.html](https://www.genome.jp/kegg/catalog/org_list.html)
 * List of available organism annotation databases: [https://bioconductor.org/packages/3.18/BiocViews.html#___OrgDb](https://bioconductor.org/packages/3.18/BiocViews.html#___OrgDb)
 
-## Examples
-
-Let's say you have the DESeq2 output CSV file that uses some custom identifiers that have to be mapped to valid GO/KEGG_ko identifiers. In this case you would use [eggNOG-mapper](http://eggnog-mapper.embl.de/) to get the mapping from your custom identifiers to the GO and KEGG_ko values. The job will provide you the file `out.emapper.annotations`. Now you execute the commands below.
-
-```bash
-# This will create the necessary GENEID-to-GO and GENEID-to-KEGG_ko mapping tables
-./src/eggnog_mapping_gen.R --annotated=<path>/out.emapper.annotations
-
-# Now you can run the enrichment analysis
-./src/gene_set_enrichment.R --file=<path-to-deseq2-csv> --organism_annotation=<annotationdb> --go_map=geneid-to-go.csv --kegg_map=geneid-to-kegg.csv --keg_keytype=kegg --keg_code=<kegg-code> --keytype=GO
-
-# Or specific for e.coli K12
-./src/gene_set_enrichment.R --file=<path-to-deseq2-csv> --organism_annotation=org.EcK12.eg.db --go_map=geneid-to-go.csv --kegg_map=geneid-to-kegg.csv --keg_keytype=kegg --keg_code=ecok --keytype=GO
-```

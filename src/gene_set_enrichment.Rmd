@@ -1,10 +1,10 @@
-# Set options
+# Set global options
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
 ```
 
-# Load IfH utility library
+# Load ifhutil library for helper functions and install required libraries
 
 ```{r}
 remotes::install_github("tumbleowlee/ifhutil")
@@ -12,58 +12,27 @@ library(ifhutil)
 ifh.init(c('numbers'), quiet = TRUE)
 ```
 
-# Set path to `out.emapper.annotations` file from eggNOG
+# Create configuration for analysis
 
-```{r}
-annotated.file <- './out.emapper.annotations'
-annotated.file
-```
-
-# Generate mappings from eggNOG output
-
-```{r}
-# Read eggNOG-mapper annotation table
-ifh.info('Read all inputs...')
-annotated.df <- ifh.table.import(annotated.file, header = FALSE, sep = '\t', comment.char = '#', strip.white = TRUE, quote = '')
-colnames(annotated.df) <- ifh.file.get.line(path = annotated.file, prefix = '#', comment.prefix = '##', sep = '\t')
-
-# Rename 'query' to 'GENEID' for GSE
-colnames(annotated.df)[colnames(annotated.df) == 'query'] <- 'GENEID'
-colnames(annotated.df)[colnames(annotated.df) == 'Preferred_name'] <- 'PreferredName'
-ifh.success('Annotated inputs loaded.')
-
-# Expand the table based on 'GOs' and export to CSV
-geneid.to.go <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID', 'PreferredName'), na = '-')
-ifh.table.export(geneid.to.go, 'geneid-to-go.csv', row.names = FALSE)
-
-# Expand the table based on 'KEGG_ko' and export to CSV
-geneid.to.kegg <- ifh.table.expand(annotated.df, by = 'KEGG_ko', split = ',', limit.to = c('GENEID', 'PreferredName'), remove.prefix = 'ko:', na = '-')
-ifh.table.export(geneid.to.kegg, 'geneid-to-kegg.csv', row.names = FALSE)
-```
-
-# Perform Gene-Set-Enrichment
-
-This section describes all necessary steps to perform GSE for GO and KEGG.
-
-## Create configuration
+Every options used in the analysis can be tuned here. It shouldn't be necessary to change anything in the other chunks.
 
 ```{r}
 # Setup default configuration
 config <- data.frame(
     # Prevent any output
     quiet = FALSE,
-    # Phylogeny to filter by
-    phylogeny = "Bacteria;Enterobacterales;",
     # Organism annotation database
     organism.annotation = "org.EcK12.eg.db",
     # Input file
     deseq.file = "./L12VLB12_MGaccession.csv",
+    # annotated file from eggNOG
+    annotated.file = "./out.emapper.annotations",
+    # Locus tag mapping from old to new
+    locus.tag.map = "./GCF_000299455.1_ASM29945v3_genomic.gff",
     # Keytype: source of annotation
     key.type = "GO",
     # ont: "BP", "MF", "CC", "ALL"
     ont = "CC",
-    # Number of permutations
-    num.perm = 10000,
     # Minimum number of genes in set
     min.gs.size = 3,
     # Maximum number of genes in set
@@ -74,22 +43,145 @@ config <- data.frame(
     #                 "BH", "BY", "fdr", "none"
     padjust.method = "none",
     # KEGG organism code, see https://www.genome.jp/kegg/catalog/org_list.html
-    kegg.code = "ecok",
+    kegg.code = "esl",
     # KEGG key type
     kegg.key.type = "kegg",
-    # GO Map
-    go.map = "geneid-to-go.csv",
-    # KEGG Map
-    kegg.map = "geneid-to-kegg.csv",
     # Count of categories to plot
     show.categories = 10000,
     # Pathway ID
-    pathway.id = "ecok00010",
+    pathway.id = "00130",
     pathway.gene.idtype = "KEGG"
 )
+
+# Reset data frames
+ifh.warn("Resetting go.geneid.df and kegg.geneid.df. You have to run next chunks for initialization.")
+go.geneid.df <- NA
+kegg.geneid.df <- NA
 ```
 
-## Install annotation database
+# Load the gff file containing information about mapping from new to old locus tags
+
+We have to load the gff file because the provided database - that is used later in the KEGG analysis - is kinda outdated and used the old locus tags.
+But our input data uses the newer locus tags. So we have to map ours to the old tags and proceed with that.
+
+```{r}
+# Load the file
+gff <- ifh.table.import(config$locus.tag.map, comment.char = "#", header = F)
+
+# Extract the given tag info from the list of metadata
+get.tag <- function(val, tag) {
+    x <- unlist(strsplit(val, ';'))
+    for (i in 1:length(x)) {
+        y <- unlist(strsplit(x[i], '='))
+        if (length(y) > 1 && y[1] == tag) {
+            return(y[2])
+        }
+    }
+    return("-")
+}
+
+# Read all possible mappings from old to new locus tags
+locus.tag.map <- data.frame(old = sapply(gff$V9, get.tag, "old_locus_tag"), new = sapply(gff$V9, get.tag, "locus_tag"))
+
+# Extract all possible mappings for a given new locus tag
+get.old.locus.tags <- function(val, conversion_table) {
+    values <- conversion_table$old[conversion_table$new == val]
+    values <- unique(values)
+    values <- values[values != "-"]
+    if (length(values) == 0) {
+        return(NA)
+    } else if (length(values) > 1) {
+        ifh.error("New locus tag can be mapped to multiple old locus tags!")
+    } else {
+        return(paste(values, collapse = ',', sep = ','))
+    }
+}
+
+# Get all unique new locus tags (it's possible input has multiple rows for the same new locus tag)
+locus.tag.tmp <- unique(locus.tag.map$new)
+# Create map from new to old locus tag and throw error if multiple mappings occur
+locus.tag.map <- data.frame(new = locus.tag.tmp, old = sapply(locus.tag.tmp, get.old.locus.tags, conversion_table = locus.tag.map))
+# Warn about unmappable new locus tags!
+ifh.warn(paste(nrow(locus.tag.map[is.na(locus.tag.map$old),]), "new locus tags unmappable to old locus tags!", sep = " "))
+```
+
+Now we have to prepare the GO and KEGG geneid data frames. Especially we have to handle the locus tag mapping so that the GSE works with the currently available database.
+
+```{r}
+# Get old locus tag for given new locus tag
+new.to.old.tag = function(val, table) {
+    new <- unlist(table$old[table$new == val])
+    return(new[1])
+}
+
+# Read eggNOG-mapper annotation table
+ifh.info('Read all inputs...')
+annotated.df <- ifh.table.import(config$annotated.file, header = FALSE, sep = '\t', comment.char = '#', strip.white = TRUE, quote = '')
+colnames(annotated.df) <- ifh.file.get.line(path = config$annotated.file, prefix = '#', comment.prefix = '##', sep = '\t')
+
+# Rename 'query' to 'GENEID' for GSE
+colnames(annotated.df)[colnames(annotated.df) == 'query'] <- 'GENEID'
+colnames(annotated.df)[colnames(annotated.df) == 'Preferred_name'] <- 'PreferredName'
+ifh.success('Annotated inputs loaded.')
+
+# Expand the table based on 'GOs' and export to CSV
+go.geneid.df <- ifh.table.expand(annotated.df, by = 'GOs', split = ',', limit.to = c('GENEID', 'PreferredName'), na = '-')
+# Store new locus tag in NEW_GENEID
+go.geneid.df$NEW_GENEID <- go.geneid.df$GENEID
+# ... and use old locus tags as GENEID as they are supported by the database
+go.geneid.df$GENEID <- sapply(go.geneid.df$GENEID, new.to.old.tag, table = locus.tag.map)
+
+# Expand the table based on 'KEGG_ko' and export to CSV
+kegg.geneid.df <- ifh.table.expand(annotated.df, by = 'KEGG_ko', split = ',', limit.to = c('GENEID', 'PreferredName', 'KEGG_Pathway'), remove.prefix = 'ko:', na = '-')
+# Store new locus tag in NEW_GENEID
+kegg.geneid.df$NEW_GENEID <- kegg.geneid.df$GENEID
+# ... and use old locus tags as GENEID as they are supported by the database
+kegg.geneid.df$GENEID <- sapply(kegg.geneid.df$GENEID, new.to.old.tag, table = locus.tag.map)
+
+# Get a comma separated list of all available PreferredName values for a given new locus tag
+get.perfnames.of.geneid <- function(val, conversion_table) {
+    values <- conversion_table$PreferredName[conversion_table$NEW_GENEID %in% val]
+    values <- unique(values)
+    return(paste(values, collapse = ',', sep = ','))
+}
+
+# Get old locus tag (GENEID) for the given new locus tag (NEW_GENEID)
+get.oldgeneid.of.geneid <- function(val, conversion_table) {
+    values <- conversion_table$GENEID[conversion_table$NEW_GENEID %in% val]
+    values <- unique(values)
+    return(paste(values, collapse = ',', sep = ','))
+}
+
+# Get all available KEGG pathways for the given new locus tag
+get.pathways.of.geneid <- function(val, conversion_table) {
+    values <- conversion_table$KEGG_Pathway[conversion_table$NEW_GENEID %in% val]
+    output <- vector()
+    for (i in 1:length(values)) {
+        tmp <- unlist(strsplit(values[i], ","))
+        output <- append(output, tmp)
+    }
+    output <- unique(output)
+    return(paste(output, collapse = ',', sep = ','))
+}
+
+# Create table data with columns 'LocusTag' (= new locus tag), "OldLocusTag", "PreferredName" and "KEGGPathways"
+kegg.geneid.info.table <- data.frame(LocusTag = unique(kegg.geneid.df$NEW_GENEID),
+                                     OldLocusTag = sapply(unique(kegg.geneid.df$NEW_GENEID), get.oldgeneid.of.geneid, conversion_table = kegg.geneid.df, USE.NAMES = F), 
+                                     PreferredName = sapply(unique(kegg.geneid.df$NEW_GENEID), get.perfnames.of.geneid, conversion_table = kegg.geneid.df, USE.NAMES = F), 
+                                     KEGGPathways = sapply(unique(kegg.geneid.df$NEW_GENEID), get.pathways.of.geneid, conversion_table = kegg.geneid.df, USE.NAMES = F))
+
+kegg.geneid.info.table
+# Export the table as simple CSV with header
+ifh.table.export(kegg.geneid.info.table, "./gene-to-pref-name.csv", row.names = FALSE, quote = F, sep = ";", col.names = TRUE)
+
+# Warn about possible unmappable new locus tags that occur in the input data
+ifh.warn(paste(length(kegg.geneid.df$NEW_GENEID[is.na(kegg.geneid.df$GENEID)]), "new locus tags not mappable to old locus tags.", sep = " "))
+ifh.warn(paste(length(kegg.geneid.df$NEW_GENEID[is.na(kegg.geneid.df$GENEID) & kegg.geneid.df$KEGG_Pathway == "-"]), "of the new locus tags have no old locus tag but are associated with a pathway.", sep = " "))
+```
+
+# Install annotation database
+
+This database contains all necessary information for GSE. This is also used to retrieve meta information that is used in plots etc.
 
 ```{r}
 # Install/Load organism annotations
@@ -98,33 +190,43 @@ ifh.install(pkg = config$organism.annotation, quiet = config$quiet)
 ifh.success("Organism annotation loaded.")
 ```
 
-### List available keytypes
+# List available keytypes
+
+This chunk will print all supported key types (see config$key.type) of the configured database.
 
 ```{r}
 ifh.info("Possible keytypes for", config$organism.annotation, ":")
 ifh.info(keytypes(get(config$organism.annotation)))
 ```
 
+# Load DESEQ CSV file
 
-## Load DESEQ CSV file
+This chunk will load the deseq2 input data and prepare the basic gene list.
 
 ```{r}
 # Read DESeq2 data
 ifh.step("Load CSV data from", config$deseq.file, "...")
 deseq2.df = ifh.table.import(config$deseq.file, header = TRUE, sep = ",")
+deseq2.df$X <- sapply(deseq2.df$X, get.oldgeneid.of.geneid, conversion_table = kegg.geneid.df, USE.NAMES = F)
 ifh.success("Data loaded.")
 
 ifh.step("Prepare gene list...")
 orig.gene.list <- deseq2.df$log2FoldChange
+
 names(orig.gene.list) <- deseq2.df$X
 gene.list <- na.omit(orig.gene.list)
 gene.list <- sort(gene.list, decreasing = TRUE)
 ifh.success("Gene list prepared.")
+
+unmappable.tags <- locus.tag.map$new[is.na(locus.tag.map$old)]
+deseq2.unmapped <- deseq2.df[deseq2.df$X.2 %in% unmappable.tags,]
+deseq2.unmapped <- data.frame(LocusTag = deseq2.unmapped$X.2, log2FoldChange = deseq2.unmapped$log2FoldChange)
 ```
 
-## Execute GO GSE
+# Load required libraries for GSE
 
-### Load required libraries
+GO and KEGG GSE require additional libraries to be installed and loaded. Thus we load the missing dependencies here.
+
 ```{r}
 # Initialize and install dependencies
 ifh.info("Check and install missing dependencies...")
@@ -132,33 +234,32 @@ ifh.init(c("clusterProfiler", "pathview", "enrichplot", "gridExtra",
            "DOSE", "ggridges", "ggplot2", "tools", "annotate", "GO.db", "HDO.db"), quiet = config$quiet)
 ```
 
-### Perform GO GSE
+# Perform GO GSE
+
+This chunk will perform the GO GSE. It's important that we have a special setup, thus we have to adapt multiple things to work. But this chunk also contains the basic process as used in the online example (see else case).
 
 ```{r}
-# Load cache file or import go-geneid mapping frame
-go.geneid.df <- NA
-if (config$go.map!= "") {
-    ifh.info("Import GO map from", config$go.map)
-    go.geneid.df <- ifh.table.import(config$go.map, header = TRUE, sep = "\t", comment.char = "#")
-    ifh.success("GO map imported.")
-}
-
 # Run GO GSE with organism database or custom GO-GENEID mapping
 ifh.step("Calculate GO gene set enrichment...")
 ifh.quiet(config$quiet)
+
 go.gse = NA
 go.gene.list = NA
 
-if (config$go.map != "") {
+if (length(go.geneid.df) > 1) {
+    # Get all supported GO ids from the database
     go.supported.ids <- select(get(config$organism.annotation), keys(get(config$organism.annotation), "GO"), "ENTREZID", "GO")[,'GO']
+    # Filter the supported ids by the onthology
     go.ids.in.ont <- filterGOByOntology(go.supported.ids, ontology = c(config$ont))
     go.supported.ids <- go.supported.ids[go.ids.in.ont == TRUE]
+    # Only keep the term to gene/name mappings for supported ids, all other ids will be ignored by GSE
     go.term.to.gene <- go.geneid.df[go.geneid.df$GO %in% go.supported.ids,]
     go.term.to.name <- go2term(go.geneid.df[,1])
     names(go.term.to.name) <- c('GO', 'NAME')
 
     go.gene.list <- gene.list
 
+    # Perform the GO GSE
     go.gse = suppressMessages({
         GSEA(geneList = go.gene.list,
              exponent = 1,
@@ -174,41 +275,54 @@ if (config$go.map != "") {
              )
     })
 
+    # Converts the given GO term to the PreferredName
     convert_go_to_pref_name <- function(val, conversion_table) {
         values <- conversion_table$PreferredName[conversion_table$GENEID %in% val]
         values <- unique(values)
-        return(paste(values, collapse = ',', sep = ','))
+        label <- paste(values, collapse = ',', sep = ',')
+        if (label == "-") {
+            label <- val
+        } else {
+            label <- paste(label, " (", unique(conversion_table$NEW_GENEID[conversion_table$GENEID %in% val]), ")", sep="")
+        }
+        return(label)
     }
+    
+    ## These next steps are necessary to have the preferred names in the plots instead of the GO terms only
 
-    #mapping
+    # Converts a list of GO terms to a list of preferred names by replacing each GO term with a list of associated preferred names
     convert_list_go_to_pref_name <- function(list, conversion_table) {
         vec <- unlist(strsplit(list, "/"))
         gene_names <- sapply(vec, convert_go_to_pref_name, conversion_table = conversion_table)
         return(paste(gene_names, collapse = "/"))
     }
 
-    #extract the dataframe from enrichKEGG object
+    # Extract the dataframe from enrichKEGG object
     temp_df = go.gse@result
 
-    #replace the IDs with sapply
+    # Replace the GO ids with the preferred names
     temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_go_to_pref_name, conversion_table = go.geneid.df)
 
-    #modify the result table
+    # Update the result
     go.gse@result = temp_df
 
+    # Also apply the GO to PreferredName for each gene set
     for (key in names(go.gse@geneSets)) {
-        go.gse@geneSets[key] <- sapply(go.gse@geneSets[key], convert_go_to_pref_name, conversion_table = go.geneid.df)
+        for (i in 1:length(go.gse@geneSets[key][[1]])) {
+            go.gse@geneSets[key][[1]][i] <- convert_go_to_pref_name(go.gse@geneSets[key][[1]][i], conversion_table = go.geneid.df)
+        }
     }
 
+    # ... and each list
     names(go.gse@geneList) <- sapply(names(go.gse@geneList), convert_go_to_pref_name, conversion_table = go.geneid.df)
     names(go.gene.list) <- sapply(names(go.gene.list), convert_go_to_pref_name, conversion_table = go.geneid.df)
 } else {
+    # Perform basic vanilla GO GSE
     go.gene.list <- gene.list
     go.gse = suppressMessages({
         gseGO(geneList = go.gene.list,
               ont = config$ont,
               keyType = config$key.type,
-              #nPerm = 10000,
               minGSSize = config$min.gs.size,
               maxGSSize = config$max.gs.size,
               pvalueCutoff = config$pvalue.cutoff,
@@ -220,7 +334,9 @@ ifh.quiet(FALSE)
 ifh.step("Calculations for GO GSE finished.")
 ```
 
-#### Plot GO GSE results
+# Plot GO GSE results
+
+This chunk will create the supported plots. 
 
 ```{r}
 ifh.step("Create GO dotplot...")
@@ -237,71 +353,40 @@ dev.off()
 ifh.success("Cnetplot created.")
 
 ifh.step("Create GO heatplot...")
-pdf("go.heatplot.pdf",width=70,height=18)
+pdf("go.heatplot.pdf",width=90,height=18)
 heatplot(go.gse, foldChange=go.gene.list, showCategory = config$show.categories)
 dev.off()
 ifh.success("Heatplot created.")
 ```
 
-### Perform KEGG GSE
+# Perform KEGG GSE
 
-#### Filter all pathways not associated with given phylogeny type
-
-```{r}
-library(KEGGREST)
-org <- data.frame(keggList("organism"))
-filtered_org = org[grep(config$phylogeny, org$phylogeny), ]
-pathways_tot = vector()
-
-pb <- progress_bar$new(total = length(filtered_org$organism))
-pb$tick(0)
-
-for (i in 1:length(filtered_org$organism))
-{
-    try({
-        pathways = keggLink("pathway", filtered_org[i,2])
-        pathways = sub(paste(".*",filtered_org[i,2], sep = ""), "", pathways)
-        pathways = unique(pathways)
-        pathways_tot = append(pathways_tot,pathways)
-        pathways_tot = unique(pathways_tot) 
-    })
-    pb$tick()
-}
-pathways_tot = paste0("K", pathways_tot)
-geneid.to.kegg <- geneid.to.kegg[geneid.to.kegg$KEGG_ko %in% pathways_tot]
-```
-
-#### Run KEGG analysis
+This chunk will perform the KEGG GSE. It's important that we have a special setup, thus we have to adapt multiple things to work. But this chunk also contains the basic process as used in the online example (see else case).
 
 ```{r}
-# Load cache file or import KEGG-geneid mapping frame
-kegg.geneid.df <- NA
-if (config$kegg.map != "") {
-    ifh.info("Import KEGG map from", config$kegg.map)
-    kegg.geneid.df <- ifh.table.import(config$kegg.map, header = TRUE, sep = "\t", comment.char = "#")
-    ifh.success("KEGG map imported.")
-}
-
 ifh.step("Prepare KEGG gene list...")
 ifh.quiet(config$quiet)
 
-# Run KEGG GSE with organism database or custom KEGG_ko-GENEID mapping
-if (config$kegg.map != "") {
+# Run KEGG GSE with our special setup
+if (length(kegg.geneid.df) > 1) {
+    ifh.step("Use eggNOG KEGG")
+    # Prepare the input by filtering duplicates and using only supported ids
     kegg.df.unique.ids = kegg.geneid.df[!duplicated(kegg.geneid.df[c("GENEID")]),]
     deseq2.df = deseq2.df[deseq2.df$X %in% kegg.df.unique.ids[["GENEID"]],]
     kegg.df.unique.ids = kegg.df.unique.ids[kegg.df.unique.ids$GENEID %in% deseq2.df$X,]
-    deseq2.df$Y = kegg.df.unique.ids$KEGG_ko
+    deseq2.df$Y = kegg.df.unique.ids$GENEID
 
+    # Prepare the input kegg gene list
     kegg.gene.list <- deseq2.df$log2FoldChange
     names(kegg.gene.list) <- deseq2.df$Y
     kegg.gene.list <- na.omit(kegg.gene.list)
     kegg.gene.list = sort(kegg.gene.list, decreasing = TRUE)
     ifh.success("KEGG gene list prepared.")
 
+    # Run KEGG GSE
     ifh.step("Calculate KEGG gene set enrichment...")
     kegg.gse <- gseKEGG(geneList = kegg.gene.list,
-                        organism = "ko",
-                        #nPerm = 10000,
+                        organism = config$kegg.code,
                         minGSSize = config$min.gs.size,
                         maxGSSize = config$max.gs.size,
                         pvalueCutoff = config$pvalue.cutoff,
@@ -309,34 +394,44 @@ if (config$kegg.map != "") {
                         keyType = config$kegg.key.type,
                         eps = 0)
 
+    # Converts a given KEGG value to a list of associated preferred names
     convert_kegg_to_pref_name <- function(val, conversion_table) {
-        values <- conversion_table$PreferredName[conversion_table$KEGG_ko %in% val]
+        values <- conversion_table$PreferredName[conversion_table$GENEID %in% val]
         values <- unique(values)
-        return(paste(values, collapse = ',', sep = ','))
+        label <- paste(values, collapse = ',', sep = ',')
+        if (label == "-") {
+            label <- val
+        } else {
+            label <- paste(label, " (", unique(conversion_table$NEW_GENEID[conversion_table$GENEID %in% val]), ")", sep="")
+        }
+        return(label)
     }
 
-    #mapping
+    # Converts a list of KEGG values with preferred names by replacing each KEGG value with a list of associated preferred names
     convert_list_kegg_to_pref_name <- function(list, conversion_table) {
         vec <- unlist(strsplit(list, "/"))
         gene_names <- sapply(vec, convert_kegg_to_pref_name, conversion_table = conversion_table)
         return(paste(gene_names, collapse = "/"))
     }
 
-    #extract the dataframe from enrichKEGG object
+    # Extract the dataframe from enrichKEGG object
     temp_df = kegg.gse@result
 
-    #replace the IDs with sapply
+    # Replace the IDs with sapply
     temp_df$core_enrichment = sapply(temp_df$core_enrichment, convert_list_kegg_to_pref_name, conversion_table = kegg.geneid.df)
 
-    #modify the result table
+    # Modify the result table
     kegg.gse@result = temp_df
 
+    # Replace all KEGG values with preferred names for plots
     for (key in names(kegg.gse@geneSets)) {
-        kegg.gse@geneSets[key] <- sapply(kegg.gse@geneSets[key], convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
+        for (i in 1:length(kegg.gse@geneSets[key][[1]])) {
+            kegg.gse@geneSets[key][[1]][i] <- convert_kegg_to_pref_name(kegg.gse@geneSets[key][[1]][i], conversion_table = kegg.geneid.df)
+        }
     }
-
     names(kegg.gse@geneList) <- sapply(names(kegg.gse@geneList), convert_kegg_to_pref_name, conversion_table = kegg.geneid.df)
 } else {
+    # Perform basic vanilla KEGG GSE
     ids <- bitr(names(orig.gene.list), fromType = config$key.type, toType = "ENTREZID", OrgDb = config$organism.annotation)
 
     kegg.df.unique.ids = ids[!duplicated(ids[c(config$key.type)]),]
@@ -352,7 +447,6 @@ if (config$kegg.map != "") {
     ifh.step("Calculate KEGG gene set enrichment...")
     kegg.gse <- gseKEGG(geneList = kegg.gene.list,
                         organism = config$kegg.code,
-                        #nPerm = 10000,
                         minGSSize = config$min.gs.size,
                         maxGSSize = config$max.gs.size,
                         pvalueCutoff = config$pvalue.cutoff,
@@ -363,28 +457,30 @@ ifh.quiet(FALSE)
 ifh.step("Calculations for KEGG GSE finished.")
 ```
 
-#### Plot KEGG GSE results
+# Plot KEGG GSE results
+
+This chunk will plot the KEGG results. For now the pathview doesn't work as expected!
 
 ```{r}
 ifh.step("Create KEGG dotplot...")
-pdf("kegg.dotplot.pdf",width=12,height=8)
+pdf("kegg.dotplot.pdf",width=8,height=13)
 dotplot(kegg.gse, showCategory = config$show.categories, title = "Enriched Pathways", split = ".sign", font.size=8) + facet_grid(.~.sign)
 dev.off()
 ifh.success("Dotplot created.")
 
 ifh.step("Create KEGG cnetplot...")
-pdf("kegg.cnetplot.pdf",width=36,height=12)
+pdf("kegg.cnetplot.pdf",width=40,height=12)
 cnetplot(kegg.gse, categorySize="pvalue", color.params = list(foldChange = kegg.gse@geneList, edge = TRUE), showCategory = config$show.categories, cex.params = list(category_label = 0.7, gene_label = 0.5))
 dev.off()
 ifh.success("Cnetplot created.")
 
 ifh.step("Create KEGG heatplot...")
-pdf("kegg.heatplot.pdf",width=50,height=16)
+pdf("kegg.heatplot.pdf",width=50,height=14)
 heatplot(kegg.gse, foldChange=kegg.gse@geneList, showCategory = config$show.categories)
 dev.off()
 ifh.success("Heatplot created.")
 
 ifh.step("Create KEGG pathview...")
-pathview(cpd.data=kegg.gene.list, pathway.id = config$pathway.id, species = config$kegg.code, gene.idtype = config$pathway.gene.idtype)
+pathview(gene.data=kegg.gene.list, pathway.id = config$pathway.id, species = config$kegg.code, kegg.native = T, gene.annotpkg = get(config$organism.annotation), gene.idtype = config$pathway.gene.idtype)
 ifh.success("Pathview created.")
 ```
