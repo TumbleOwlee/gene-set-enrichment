@@ -12,7 +12,7 @@ The repository provides the R markdown file `./src/gene_set_enrichment.Rmd`. Jus
 
 The configuration consists of multiple parameters. Each one has to be carefully chosen to work with your provided data and to generate the correct results.
 
-Parameters:
+**Parameters:**
 * `quiet`: If true, this option just disables excessive logging to prevent terminal flood.
 * `organism.annotation`: This is the database to use for annotation retrieval. It's used by all functions provided by `clusterProfiler`.
 * `deseq.file`: Path to the DESeq2 file.
